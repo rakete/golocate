@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	//"os"
+	"github.com/go-cmd/cmd"
 	"os/exec"
-	//"path/filepath"
 	"strings"
-	//"syscall"
+	"sync"
 )
 
 func DirToDbName(dir string) string {
@@ -18,32 +17,33 @@ func DirToDbName(dir string) string {
 	return name
 }
 
-func UpdateDbAndLocate(dir string) *exec.Cmd {
+func UpdateDbAndLocate(dir string) {
 	mlocate, lookErr := exec.LookPath("updatedb.mlocate")
 	if lookErr != nil {
 		panic(lookErr)
 	}
 
-	name := DirToDbName(dir)
+	dbname := DirToDbName(dir)
 
-	cmd := exec.Command(mlocate, "--require-visibility", "0", "-o", "/home/rakete/mlocate/"+name+".db", "-U", dir)
+	cmd := cmd.NewCmd(mlocate, "--require-visibility", "0", "-o", "/home/rakete/mlocate/"+dbname+".db", "-U", dir)
+	statusChan := cmd.Start()
 
-	execErr := cmd.Start()
-
-	if execErr != nil {
-		panic(execErr)
-	}
-
-	return cmd
+	<-statusChan
+	fmt.Println(dir)
 }
 
 func main() {
 
-	directories := []string{"/home/rakete", "/usr", "/"}
+	directories := []string{"/home/rakete", "/usr", "/var", "/bin", "/lib", "/sys", "/proc"}
 
+	var wg sync.WaitGroup
 	for _, dir := range directories {
-		fmt.Println(dir)
-		UpdateDbAndLocate(dir)
+		wg.Add(1)
+		go func(dir string) {
+			UpdateDbAndLocate(dir)
+			defer wg.Done()
+		}(dir)
 	}
 
+	wg.Wait()
 }
