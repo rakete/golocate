@@ -9,16 +9,16 @@ import (
 	//"strconv"
 	"strings"
 	"sync"
-	"time"
+	//"time"
 
 	"github.com/go-cmd/cmd"
-	"github.com/gotk3/gotk3/glib"
 	"gotk3/gtk"
 )
 
-type RowEntry struct {
+type FileEntry struct {
+	path     string
 	fileinfo os.FileInfo
-	score    int
+	urgency  int
 }
 
 func DirToDbName(dir string) string {
@@ -41,8 +41,8 @@ func RunUpdatedbCommand(dbname, updatedb, prunenames, prunepaths, dir string) {
 	<-updatedbStatusChan
 }
 
-func RunLocateCommand(dbname, mlocate, dir string) []string {
-	mlocateCmd := cmd.NewCmd(mlocate, "-d", "/dev/shm/"+dbname+".db", "-r", ".*")
+func RunLocateCommand(dbname, mlocate, dir, query string) []string {
+	mlocateCmd := cmd.NewCmd(mlocate, "-d", "/dev/shm/"+dbname+".db", "-r", query)
 	mlocateStatusChan := mlocateCmd.Start()
 	<-mlocateStatusChan
 
@@ -82,21 +82,54 @@ func SplitDirectories(directories []string) ([]string, string) {
 	return splittedDirectories, additionalPrunepaths
 }
 
-func SearchDirectory(wg *sync.WaitGroup, liststore *gtk.ListStore, updatedb, prunenames, prunepaths, mlocate, dir string) {
+var lastQuery = ""
+
+func SearchDirectory(searchWg *sync.WaitGroup, collect chan []FileEntry, updatedb, prunenames, prunepaths, mlocate, dir, query string) {
 	dbname := DirToDbName(dir)
-	RunUpdatedbCommand(dbname, updatedb, prunenames, prunepaths, dir)
-	stdout := RunLocateCommand(dbname, mlocate, dir)
-	log.Println(dir, ": ", len(stdout))
-	for i := 0; i < len(stdout); i++ {
-		fileinfo, err := os.Stat(stdout[i])
-		if err != nil {
-			log.Println("Error reading file:", err)
-		} else {
-			t := fileinfo.ModTime()
-			glib.IdleAdd(AddRow, liststore, stdout[i], t.Format(time.UnixDate))
-		}
+	if len(query) > len(lastQuery) {
+		RunUpdatedbCommand(dbname, updatedb, prunenames, prunepaths, dir)
+		lastQuery = query
 	}
-	defer wg.Done()
+	stdout := RunLocateCommand(dbname, mlocate, dir, query)
+	log.Println(dir, ": ", len(stdout))
+
+	entries := make(chan FileEntry)
+	var statWg sync.WaitGroup
+	for i := 0; i < len(stdout); i++ {
+		statWg.Add(1)
+		filepath := stdout[i]
+		dirpath := path.Dir(filepath)
+
+		go func() {
+			fileinfo, err := os.Lstat(filepath)
+			if err != nil {
+				log.Println("Error reading file:", err)
+			} else {
+				entries <- FileEntry{path: dirpath, fileinfo: fileinfo, urgency: 0}
+			}
+			defer statWg.Done()
+		}()
+	}
+
+	finish := make(chan struct{})
+	var results []FileEntry
+	go func() {
+		for {
+			select {
+			case fileentry := <-entries:
+				results = append(results, fileentry)
+			case <-finish:
+				collect <- results
+				return
+			}
+		}
+	}()
+
+	go func() {
+		statWg.Wait()
+		close(finish)
+		searchWg.Done()
+	}()
 }
 
 func Search(liststore *gtk.ListStore) {
@@ -110,22 +143,41 @@ func Search(liststore *gtk.ListStore) {
 		panic(mlocateErr)
 	}
 
-	userDirectories := []string{os.Getenv("HOME")}
-	userPrunenames := ".git .bzr .hg .svn"
+	userDirectories := []string{os.Getenv("HOME"), "/usr", "/var"}
+	userPrunenames := ""
 	userPrunepaths := "/tmp /var/spool /media /home/.ecryptfs /var/lib/schroot"
 
 	splittedDirectories, additionalPrunepaths := SplitDirectories(userDirectories)
 	log.Println(additionalPrunepaths)
 
+	collect := make(chan []FileEntry)
+
 	var wg sync.WaitGroup
+	query := ".*"
 	for _, dir := range splittedDirectories {
 		wg.Add(1)
-		SearchDirectory(&wg, liststore, updatedb, userPrunenames, userPrunepaths, mlocate, dir)
+		go SearchDirectory(&wg, collect, updatedb, userPrunenames, userPrunepaths, mlocate, dir, query)
 	}
 
 	for _, dir := range userDirectories {
 		wg.Add(1)
-		SearchDirectory(&wg, liststore, updatedb, userPrunenames, userPrunepaths+additionalPrunepaths, mlocate, dir)
+		go SearchDirectory(&wg, collect, updatedb, userPrunenames, userPrunepaths+additionalPrunepaths, mlocate, dir, query)
 	}
+
+	finish := make(chan struct{})
+	var sortedResults []FileEntry
+	go func() {
+		for {
+			select {
+			case directoryResults := <-collect:
+				sortedResults = append(sortedResults, directoryResults...)
+			case <-finish:
+				log.Println(len(sortedResults))
+				return
+			}
+		}
+	}()
+
 	wg.Wait()
+	close(finish)
 }
