@@ -91,17 +91,14 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, dirchan chan string, colle
 		wg.Add(1)
 		go func() {
 			collect.byname <- sortFileEntries(SORT_BY_NAME, files)
-			defer wg.Done()
 		}()
 		wg.Add(1)
 		go func() {
 			collect.bymodtime <- sortFileEntries(SORT_BY_MODTIME, files)
-			defer wg.Done()
 		}()
 		wg.Add(1)
 		go func() {
 			collect.bysize <- sortFileEntries(SORT_BY_SIZE, files)
-			defer wg.Done()
 		}()
 	}
 
@@ -164,7 +161,7 @@ func merge(sorttype int, left, right []FileEntry) []FileEntry {
 	return result
 }
 
-func Search(display ResultChannel, query *regexp.Regexp) {
+func Search(display ResultChannel, finish chan struct{}, query *regexp.Regexp) {
 	log.Println("start search")
 
 	userDirectories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
@@ -173,7 +170,6 @@ func Search(display ResultChannel, query *regexp.Regexp) {
 
 	dirchan := make(chan string)
 	collect := ResultChannel{make(chan []FileEntry), make(chan []FileEntry), make(chan []FileEntry)}
-	finish := make(chan struct{})
 	maxproc := make(chan struct{}, 16)
 	go func() {
 		for {
@@ -195,7 +191,8 @@ func Search(display ResultChannel, query *regexp.Regexp) {
 			select {
 			case newbyname := <-collect.byname:
 				resultsbyname = merge(SORT_BY_NAME, resultsbyname, newbyname)
-				//display.byname <- resultsbyname
+				display.byname <- resultsbyname
+				wg.Done()
 			case <-finish:
 				log.Println("resultsbyname", len(resultsbyname))
 				return
@@ -209,7 +206,8 @@ func Search(display ResultChannel, query *regexp.Regexp) {
 			select {
 			case newbymodtime := <-collect.bymodtime:
 				resultsbymodtime = merge(SORT_BY_MODTIME, resultsbymodtime, newbymodtime)
-				//display.bymodtime <- resultsbymodtime
+				display.bymodtime <- resultsbymodtime
+				wg.Done()
 			case <-finish:
 				log.Println("resultsbymodtime", len(resultsbymodtime))
 				return
@@ -223,7 +221,8 @@ func Search(display ResultChannel, query *regexp.Regexp) {
 			select {
 			case newbysize := <-collect.bysize:
 				resultsbysize = merge(SORT_BY_SIZE, resultsbysize, newbysize)
-				//display.bysize <- resultsbysize
+				display.bysize <- resultsbysize
+				wg.Done()
 			case <-finish:
 				log.Println("resultsbysize:", len(resultsbysize))
 				return

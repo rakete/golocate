@@ -101,26 +101,27 @@ func SetupWindow(application *gtk.Application, treeview *gtk.TreeView, liststore
 	aSearch := glib.SimpleActionNew("search", nil)
 	aSearch.Connect("activate", func() {
 		display := ResultChannel{make(chan []FileEntry), make(chan []FileEntry), make(chan []FileEntry)}
+		finish := make(chan struct{})
 		go func() {
 			glib.IdleAdd(liststore.Clear)
-			Search(display, nil)
+			Search(display, finish, nil)
 			log.Println("close finish in main")
 		}()
-		// var byname, bymodtime, bysize []FileEntry
-		// go func() {
-		// 	for {
-		// 		select {
-		// 		case byname = <-display.byname:
-		// 		case bymodtime = <-display.bymodtime:
-		// 		case bysize = <-display.bysize:
-		// 		case <-finish:
-		// 			log.Println("byname:", len(byname))
-		// 			log.Println("bymodtime:", len(bymodtime))
-		// 			log.Println("bysize:", len(bysize))
-		// 			return
-		// 		}
-		// 	}
-		// }()
+		var byname, bymodtime, bysize []FileEntry
+		go func() {
+			for {
+				select {
+				case byname = <-display.byname:
+				case bymodtime = <-display.bymodtime:
+				case bysize = <-display.bysize:
+				case <-finish:
+					log.Println("byname:", len(byname))
+					log.Println("bymodtime:", len(bymodtime))
+					log.Println("bysize:", len(bysize))
+					return
+				}
+			}
+		}()
 	})
 	application.AddAction(aSearch)
 
