@@ -10,46 +10,24 @@ import (
 	//"time"
 	"io/ioutil"
 	"sort"
+	//"gotk3/gtk"
+)
 
-	"gotk3/gtk"
+const (
+	SORT_BY_NAME = iota
+	SORT_BY_MODTIME
+	SORT_BY_SIZE
 )
 
 type FileEntry struct {
 	path     string
 	fileinfo os.FileInfo
-	urgency  int
 }
 
-func visit(wg *sync.WaitGroup, maxproc chan struct{}, dirchan chan string, collect chan []FileEntry, dir string, query *regexp.Regexp) {
-	entries, err := ioutil.ReadDir(dir)
-	<-maxproc
-
-	if err != nil {
-		log.Println("Could not read directory:", err)
-	} else {
-		var matches []string
-		for _, entry := range entries {
-			entrypath := path.Join(dir, entry.Name())
-			if entry.IsDir() {
-				dirchan <- entrypath
-			} else if query.MatchString(entrypath) {
-				matches = append(matches, entrypath)
-			}
-		}
-
-		var files []FileEntry
-		for _, entrypath := range matches {
-			if fileinfo, err := os.Lstat(entrypath); err != nil {
-				log.Println("Could not read file:", err)
-			} else {
-				files = append(files, FileEntry{path: entrypath, fileinfo: fileinfo, urgency: 0})
-			}
-		}
-
-		collect <- sortFileEntries(sorttype, files)
-	}
-
-	defer wg.Done()
+type ResultChannel struct {
+	byname    chan []FileEntry
+	bymodtime chan []FileEntry
+	bysize    chan []FileEntry
 }
 
 type SortFunc func([]FileEntry) []FileEntry
@@ -68,10 +46,11 @@ func (a ByModTime) Less(i, j int) bool {
 	return a[i].fileinfo.ModTime().Before(a[j].fileinfo.ModTime()) || a[i].fileinfo.ModTime().Equal(a[j].fileinfo.ModTime())
 }
 
-const (
-	SORT_BY_NAME = iota
-	SORT_BY_MODTIME
-)
+type BySize []FileEntry
+
+func (a BySize) Len() int           { return len(a) }
+func (a BySize) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a BySize) Less(i, j int) bool { return a[i].fileinfo.Size() <= a[j].fileinfo.Size() }
 
 func sortFileEntries(sorttype int, files []FileEntry) []FileEntry {
 	switch sorttype {
@@ -81,6 +60,52 @@ func sortFileEntries(sorttype int, files []FileEntry) []FileEntry {
 		sort.Sort(ByModTime(files))
 	}
 	return files
+}
+
+func visit(wg *sync.WaitGroup, maxproc chan struct{}, dirchan chan string, collect ResultChannel, dir string, query *regexp.Regexp) {
+	entries, err := ioutil.ReadDir(dir)
+	<-maxproc
+
+	if err != nil {
+		//log.Println("Could not read directory:", err)
+	} else {
+		var matches []string
+		for _, entry := range entries {
+			entrypath := path.Join(dir, entry.Name())
+			if entry.IsDir() {
+				dirchan <- entrypath
+			} else if query == nil || query.MatchString(entrypath) {
+				matches = append(matches, entrypath)
+			}
+		}
+
+		var files []FileEntry
+		for _, entrypath := range matches {
+			if fileinfo, err := os.Lstat(entrypath); err != nil {
+				log.Println("Could not read file:", err)
+			} else {
+				files = append(files, FileEntry{path: dir, fileinfo: fileinfo})
+			}
+		}
+
+		wg.Add(1)
+		go func() {
+			collect.byname <- sortFileEntries(SORT_BY_NAME, files)
+			defer wg.Done()
+		}()
+		wg.Add(1)
+		go func() {
+			collect.bymodtime <- sortFileEntries(SORT_BY_MODTIME, files)
+			defer wg.Done()
+		}()
+		wg.Add(1)
+		go func() {
+			collect.bysize <- sortFileEntries(SORT_BY_SIZE, files)
+			defer wg.Done()
+		}()
+	}
+
+	defer wg.Done()
 }
 
 func merge(sorttype int, left, right []FileEntry) []FileEntry {
@@ -105,6 +130,10 @@ func merge(sorttype int, left, right []FileEntry) []FileEntry {
 	case SORT_BY_MODTIME:
 		lesscomparefunc = func(a []FileEntry, i int, b []FileEntry, j int) bool {
 			return a[i].fileinfo.ModTime().Before(b[j].fileinfo.ModTime()) || a[i].fileinfo.ModTime().Equal(b[j].fileinfo.ModTime())
+		}
+	case SORT_BY_SIZE:
+		lesscomparefunc = func(a []FileEntry, i int, b []FileEntry, j int) bool {
+			return a[i].fileinfo.Size() <= b[j].fileinfo.Size()
 		}
 	}
 
@@ -135,20 +164,15 @@ func merge(sorttype int, left, right []FileEntry) []FileEntry {
 	return result
 }
 
-func Search(liststore *gtk.ListStore) {
+func Search(display ResultChannel, query *regexp.Regexp) {
 	log.Println("start search")
 
-	userDirectories := []string{os.Getenv("HOME"), "/usr", "/sys", "/opt", "/etc", "/bin", "/sbin"}
+	userDirectories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
 
-	sorttype := SORT_BY_MODTIME
-	query, err := regexp.Compile(".*")
-	if err != nil {
-		log.Fatal("Error compiling regexp:", err)
-	}
 	var wg sync.WaitGroup
 
 	dirchan := make(chan string)
-	collect := make(chan []FileEntry)
+	collect := ResultChannel{make(chan []FileEntry), make(chan []FileEntry), make(chan []FileEntry)}
 	finish := make(chan struct{})
 	maxproc := make(chan struct{}, 16)
 	go func() {
@@ -165,14 +189,43 @@ func Search(liststore *gtk.ListStore) {
 
 	}()
 
-	var results []FileEntry
+	var resultsbyname []FileEntry
 	go func() {
 		for {
 			select {
-			case newentries := <-collect:
-				results = merge(sorttype, results, newentries)
+			case newbyname := <-collect.byname:
+				resultsbyname = merge(SORT_BY_NAME, resultsbyname, newbyname)
+				//display.byname <- resultsbyname
 			case <-finish:
-				log.Println(len(results))
+				log.Println("resultsbyname", len(resultsbyname))
+				return
+			}
+		}
+	}()
+
+	var resultsbymodtime []FileEntry
+	go func() {
+		for {
+			select {
+			case newbymodtime := <-collect.bymodtime:
+				resultsbymodtime = merge(SORT_BY_MODTIME, resultsbymodtime, newbymodtime)
+				//display.bymodtime <- resultsbymodtime
+			case <-finish:
+				log.Println("resultsbymodtime", len(resultsbymodtime))
+				return
+			}
+		}
+	}()
+
+	var resultsbysize []FileEntry
+	go func() {
+		for {
+			select {
+			case newbysize := <-collect.bysize:
+				resultsbysize = merge(SORT_BY_SIZE, resultsbysize, newbysize)
+				//display.bysize <- resultsbysize
+			case <-finish:
+				log.Println("resultsbysize:", len(resultsbysize))
 				return
 			}
 		}
@@ -184,4 +237,6 @@ func Search(liststore *gtk.ListStore) {
 
 	wg.Wait()
 	close(finish)
+	log.Println("close finish in search")
+
 }
