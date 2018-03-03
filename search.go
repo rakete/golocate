@@ -31,27 +31,29 @@ type ResultChannel struct {
 	bysize    chan []FileEntry
 }
 
-type SortFunc func([]FileEntry) []FileEntry
-
 type ByName []FileEntry
 
-func (a ByName) Len() int           { return len(a) }
-func (a ByName) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ByName) Less(i, j int) bool { return a[i].fileinfo.Name() <= a[j].fileinfo.Name() }
+func (a ByName) Len() int      { return len(a) }
+func (a ByName) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByName) Less(i, j int) bool {
+	return a[i].fileinfo.Name() < a[j].fileinfo.Name()
+}
 
 type ByModTime []FileEntry
 
 func (a ByModTime) Len() int      { return len(a) }
 func (a ByModTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a ByModTime) Less(i, j int) bool {
-	return a[i].fileinfo.ModTime().Before(a[j].fileinfo.ModTime()) || a[i].fileinfo.ModTime().Equal(a[j].fileinfo.ModTime())
+	return a[i].fileinfo.ModTime().Before(a[j].fileinfo.ModTime())
 }
 
 type BySize []FileEntry
 
-func (a BySize) Len() int           { return len(a) }
-func (a BySize) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a BySize) Less(i, j int) bool { return a[i].fileinfo.Size() <= a[j].fileinfo.Size() }
+func (a BySize) Len() int      { return len(a) }
+func (a BySize) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a BySize) Less(i, j int) bool {
+	return a[i].fileinfo.Size() < a[j].fileinfo.Size()
+}
 
 func sortFileEntries(sorttype int, files []FileEntry) []FileEntry {
 	switch sorttype {
@@ -59,6 +61,8 @@ func sortFileEntries(sorttype int, files []FileEntry) []FileEntry {
 		sort.Sort(ByName(files))
 	case SORT_BY_MODTIME:
 		sort.Sort(ByModTime(files))
+	case SORT_BY_SIZE:
+		sort.Sort(BySize(files))
 	}
 	return files
 }
@@ -115,34 +119,33 @@ func merge(sorttype int, left, right []FileEntry) []FileEntry {
 		return left
 	}
 
-	var result []FileEntry
-
-	type LessCompareFunc func([]FileEntry, int, []FileEntry, int) bool
-	var lesscomparefunc LessCompareFunc
+	type LessFunc func([]FileEntry, int, []FileEntry, int) bool
+	var less LessFunc
 
 	switch sorttype {
 	case SORT_BY_NAME:
-		lesscomparefunc = func(a []FileEntry, i int, b []FileEntry, j int) bool {
-			return a[i].fileinfo.Name() <= b[j].fileinfo.Name()
+		less = func(a []FileEntry, i int, b []FileEntry, j int) bool {
+			return a[i].fileinfo.Name() < b[j].fileinfo.Name()
 		}
 	case SORT_BY_MODTIME:
-		lesscomparefunc = func(a []FileEntry, i int, b []FileEntry, j int) bool {
-			return a[i].fileinfo.ModTime().Before(b[j].fileinfo.ModTime()) || a[i].fileinfo.ModTime().Equal(b[j].fileinfo.ModTime())
+		less = func(a []FileEntry, i int, b []FileEntry, j int) bool {
+			return a[i].fileinfo.ModTime().Before(b[j].fileinfo.ModTime())
 		}
 	case SORT_BY_SIZE:
-		lesscomparefunc = func(a []FileEntry, i int, b []FileEntry, j int) bool {
-			return a[i].fileinfo.Size() <= b[j].fileinfo.Size()
+		less = func(a []FileEntry, i int, b []FileEntry, j int) bool {
+			return a[i].fileinfo.Size() < b[j].fileinfo.Size()
 		}
 	}
 
-	if lesscomparefunc(left, 0, right, len(right)-1) {
-		result = append(left, right...)
-	} else if lesscomparefunc(left, len(left)-1, right, 0) {
+	var result []FileEntry
+	if less(right, len(right)-1, left, 0) {
 		result = append(right, left...)
+	} else if less(left, len(left)-1, right, 0) {
+		result = append(left, right...)
 	} else {
 		i, j := 0, 0
 		for i < len(left) && j < len(right) {
-			if lesscomparefunc(left, i, right, j) {
+			if less(left, i, right, j) {
 				result = append(result, left[i])
 				i += 1
 			} else {
