@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"sort"
 	//"gotk3/gtk"
+	"runtime"
 )
 
 const (
@@ -161,8 +162,9 @@ func merge(sorttype int, left, right []FileEntry) []FileEntry {
 	return result
 }
 
-func Search(display ResultChannel, finish chan struct{}, query *regexp.Regexp) {
-	log.Println("start search")
+func Search(display ResultChannel, query *regexp.Regexp) {
+	cores := runtime.NumCPU()
+	log.Println("start search on", cores, "cores")
 
 	userDirectories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
 
@@ -170,7 +172,8 @@ func Search(display ResultChannel, finish chan struct{}, query *regexp.Regexp) {
 
 	dirchan := make(chan string)
 	collect := ResultChannel{make(chan []FileEntry), make(chan []FileEntry), make(chan []FileEntry)}
-	maxproc := make(chan struct{}, 16)
+	finish := make(chan struct{})
+	maxproc := make(chan struct{}, cores*2)
 	go func() {
 		for {
 			select {
