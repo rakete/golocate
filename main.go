@@ -13,7 +13,7 @@ const (
 	COLUMN_MODTIME
 )
 
-func CreateColumn(title string, id int) *gtk.TreeViewColumn {
+func createColumn(title string, id int) *gtk.TreeViewColumn {
 	cellRenderer, err := gtk.CellRendererTextNew()
 	if err != nil {
 		log.Fatal("Unable to create text cell renderer:", err)
@@ -44,7 +44,7 @@ func AddRow(liststore *gtk.ListStore, filename, count string) {
 	}
 }
 
-func SetupTreeView() (*gtk.TreeView, *gtk.ListStore) {
+func setupTreeView() (*gtk.TreeView, *gtk.ListStore) {
 	treeView, err := gtk.TreeViewNew()
 	if err != nil {
 		log.Fatal("Unable to create tree view:", err)
@@ -65,7 +65,7 @@ func SetupTreeView() (*gtk.TreeView, *gtk.ListStore) {
 	return treeView, liststore
 }
 
-func SetupSearchBar() *gtk.SearchBar {
+func setupSearchBar() *gtk.SearchBar {
 	searchbar, err := gtk.SearchBarNew()
 	if err != nil {
 		log.Fatal("Could not create search bar:", err)
@@ -74,7 +74,7 @@ func SetupSearchBar() *gtk.SearchBar {
 	return searchbar
 }
 
-func SetupWindow(application *gtk.Application, treeview *gtk.TreeView, liststore *gtk.ListStore, searchbar *gtk.SearchBar, title string) {
+func setupWindow(display ResultChannel, application *gtk.Application, treeview *gtk.TreeView, liststore *gtk.ListStore, searchbar *gtk.SearchBar, title string) {
 	win, err := gtk.ApplicationWindowNew(application)
 	if err != nil {
 		log.Fatal("Unable to create window:", err)
