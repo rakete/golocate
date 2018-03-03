@@ -10,6 +10,7 @@ import (
 
 const (
 	COLUMN_FILENAME = iota
+	COLUMN_SIZE
 	COLUMN_MODTIME
 )
 
@@ -50,11 +51,12 @@ func setupTreeView() (*gtk.TreeView, *gtk.ListStore) {
 		log.Fatal("Unable to create tree view:", err)
 	}
 
-	treeView.AppendColumn(CreateColumn("Filename", COLUMN_FILENAME))
-	treeView.AppendColumn(CreateColumn("Modification Time", COLUMN_MODTIME))
+	treeView.AppendColumn(createColumn("Filename", COLUMN_FILENAME))
+	treeView.AppendColumn(createColumn("Size", COLUMN_SIZE))
+	treeView.AppendColumn(createColumn("Modification Time", COLUMN_MODTIME))
 
 	// Creating a list store. This is what holds the data that will be shown on our tree view.
-	liststore, err := gtk.ListStoreNew(glib.TYPE_STRING, glib.TYPE_STRING)
+	liststore, err := gtk.ListStoreNew(glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING)
 	if err != nil {
 		log.Fatal("Unable to create list store:", err)
 	}
