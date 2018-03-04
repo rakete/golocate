@@ -37,18 +37,18 @@ func getDirectoryFiles(dir string) []FileEntry {
 func TestSort(t *testing.T) {
 	files := getDirectoryFiles("/tmp")
 
-	byname := sortFileEntries(SORT_BY_NAME, files)
-	if !sort.IsSorted(ByName(byname)) {
+	byname := sortFileEntries(ByName(files))
+	if !sort.IsSorted(byname) {
 		t.Error("Not sorted by name!")
 	}
 
-	bymodtime := sortFileEntries(SORT_BY_MODTIME, files)
-	if !sort.IsSorted(ByModTime(bymodtime)) {
+	bymodtime := sortFileEntries(ByModTime(files))
+	if !sort.IsSorted(bymodtime) {
 		t.Error("Not sorted by modtime!")
 	}
 
-	bysize := sortFileEntries(SORT_BY_SIZE, files)
-	if !sort.IsSorted(BySize(bysize)) {
+	bysize := sortFileEntries(BySize(files))
+	if !sort.IsSorted(bysize) {
 		t.Error("Not sorted by size!")
 	}
 
@@ -62,7 +62,7 @@ func BenchmarkSortByName(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(SORT_BY_NAME, files)
+		sortFileEntries(ByName(files))
 	}
 }
 
@@ -73,7 +73,7 @@ func BenchmarkSortByModTime(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(SORT_BY_MODTIME, files)
+		sortFileEntries(ByModTime(files))
 	}
 }
 
@@ -84,7 +84,7 @@ func BenchmarkSortBySize(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(SORT_BY_SIZE, files)
+		sortFileEntries(BySize(files))
 	}
 }
 
@@ -93,9 +93,9 @@ func TestMerge(t *testing.T) {
 	var byname, bymodtime, bysize []FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
-		byname = merge(SORT_BY_NAME, byname, sortFileEntries(SORT_BY_NAME, files))
-		bymodtime = merge(SORT_BY_MODTIME, bymodtime, sortFileEntries(SORT_BY_MODTIME, files))
-		bysize = merge(SORT_BY_SIZE, bysize, sortFileEntries(SORT_BY_SIZE, files))
+		byname = merge(SORT_BY_NAME, byname, sortFileEntries(ByName(files)).(ByName))
+		bymodtime = merge(SORT_BY_MODTIME, bymodtime, sortFileEntries(ByModTime(files)).(ByModTime))
+		bysize = merge(SORT_BY_SIZE, bysize, sortFileEntries(BySize(files)).(BySize))
 	}
 
 	if !sort.IsSorted(ByName(byname)) {
@@ -130,7 +130,7 @@ func BenchmarkMergeByName(b *testing.B) {
 	var cache [][]FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
-		cache = append(cache, sortFileEntries(SORT_BY_NAME, files))
+		cache = append(cache, sortFileEntries(ByName(files)).(ByName))
 	}
 
 	var merged []FileEntry
@@ -149,7 +149,7 @@ func BenchmarkMergeByModTime(b *testing.B) {
 	var cache [][]FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
-		cache = append(cache, sortFileEntries(SORT_BY_MODTIME, files))
+		cache = append(cache, sortFileEntries(ByModTime(files)).(ByModTime))
 	}
 
 	var merged []FileEntry
@@ -168,7 +168,7 @@ func BenchmarkMergeBySize(b *testing.B) {
 	var cache [][]FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
-		cache = append(cache, sortFileEntries(SORT_BY_SIZE, files))
+		cache = append(cache, sortFileEntries(BySize(files)).(BySize))
 	}
 
 	var merged []FileEntry

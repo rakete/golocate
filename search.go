@@ -26,9 +26,9 @@ type FileEntry struct {
 }
 
 type ResultChannel struct {
-	byname    chan []FileEntry
-	bymodtime chan []FileEntry
-	bysize    chan []FileEntry
+	byname    chan ByName
+	bymodtime chan ByModTime
+	bysize    chan BySize
 }
 
 type ByName []FileEntry
@@ -55,15 +55,8 @@ func (a BySize) Less(i, j int) bool {
 	return a[i].fileinfo.Size() < a[j].fileinfo.Size()
 }
 
-func sortFileEntries(sorttype int, files []FileEntry) []FileEntry {
-	switch sorttype {
-	case SORT_BY_NAME:
-		sort.Sort(ByName(files))
-	case SORT_BY_MODTIME:
-		sort.Sort(ByModTime(files))
-	case SORT_BY_SIZE:
-		sort.Sort(BySize(files))
-	}
+func sortFileEntries(files sort.Interface) sort.Interface {
+	sort.Stable(files)
 	return files
 }
 
@@ -95,15 +88,15 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, dirchan chan string, colle
 
 		wg.Add(1)
 		go func() {
-			collect.byname <- sortFileEntries(SORT_BY_NAME, files)
+			collect.byname <- sortFileEntries(ByName(files)).(ByName)
 		}()
 		wg.Add(1)
 		go func() {
-			collect.bymodtime <- sortFileEntries(SORT_BY_MODTIME, files)
+			collect.bymodtime <- sortFileEntries(ByModTime(files)).(ByModTime)
 		}()
 		wg.Add(1)
 		go func() {
-			collect.bysize <- sortFileEntries(SORT_BY_SIZE, files)
+			collect.bysize <- sortFileEntries(BySize(files)).(BySize)
 		}()
 	}
 
@@ -143,22 +136,31 @@ func merge(sorttype int, left, right []FileEntry) []FileEntry {
 	} else if less(left, len(left)-1, right, 0) {
 		result = append(left, right...)
 	} else {
-		i, j := 0, 0
-		for i < len(left) && j < len(right) {
-			if less(left, i, right, j) {
-				result = append(result, left[i])
-				i += 1
-			} else {
-				result = append(result, right[j])
-				j += 1
-			}
-		}
+		// i, j := 0, 0
+		// for i < len(left) && j < len(right) {
+		// 	if less(left, i, right, j) {
+		// 		result = append(result, left[i])
+		// 		i += 1
+		// 	} else {
+		// 		result = append(result, right[j])
+		// 		j += 1
+		// 	}
+		// }
 
-		if i < len(left) {
-			result = append(result, left[i:]...)
-		}
-		if j < len(right) {
-			result = append(result, right[j:]...)
+		// if i < len(left) {
+		// 	result = append(result, left[i:]...)
+		// }
+		// if j < len(right) {
+		// 	result = append(result, right[j:]...)
+		// }
+		result = append(left, right...)
+		switch sorttype {
+		case SORT_BY_NAME:
+			sort.Stable(ByName(result))
+		case SORT_BY_MODTIME:
+			sort.Stable(ByModTime(result))
+		case SORT_BY_SIZE:
+			sort.Stable(BySize(result))
 		}
 	}
 
@@ -174,7 +176,7 @@ func Search(display ResultChannel, query *regexp.Regexp) {
 	var wg sync.WaitGroup
 
 	dirchan := make(chan string)
-	collect := ResultChannel{make(chan []FileEntry), make(chan []FileEntry), make(chan []FileEntry)}
+	collect := ResultChannel{make(chan ByName), make(chan ByModTime), make(chan BySize)}
 	finish := make(chan struct{})
 	maxproc := make(chan struct{}, cores*2)
 	go func() {

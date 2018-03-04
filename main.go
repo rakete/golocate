@@ -232,7 +232,7 @@ func main() {
 		log.Fatal("Could not create application:", err)
 	}
 
-	display := ResultChannel{make(chan []FileEntry), make(chan []FileEntry), make(chan []FileEntry)}
+	display := ResultChannel{make(chan ByName), make(chan ByModTime), make(chan BySize)}
 
 	var liststore *gtk.ListStore
 	var treeview *gtk.TreeView
