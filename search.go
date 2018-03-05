@@ -112,47 +112,28 @@ func merge(sorttype int, left, right []FileEntry) []FileEntry {
 		return left
 	}
 
-	type LessFunc func([]FileEntry, int, []FileEntry, int) bool
-	var less LessFunc
-
+	testRightBeforeLeft, testLeftBeforeRight := false, false
+	xs := []FileEntry{right[len(right)-1], left[0]}
+	ys := []FileEntry{left[len(left)-1], right[0]}
 	switch sorttype {
 	case SORT_BY_NAME:
-		less = func(a []FileEntry, i int, b []FileEntry, j int) bool {
-			return a[i].fileinfo.Name() < b[j].fileinfo.Name()
-		}
+		testRightBeforeLeft = ByName(xs).Less(0, 1)
+		testLeftBeforeRight = ByName(ys).Less(0, 1)
 	case SORT_BY_MODTIME:
-		less = func(a []FileEntry, i int, b []FileEntry, j int) bool {
-			return a[i].fileinfo.ModTime().Before(b[j].fileinfo.ModTime())
-		}
+		testRightBeforeLeft = ByModTime(xs).Less(0, 1)
+		testLeftBeforeRight = ByModTime(ys).Less(0, 1)
 	case SORT_BY_SIZE:
-		less = func(a []FileEntry, i int, b []FileEntry, j int) bool {
-			return a[i].fileinfo.Size() < b[j].fileinfo.Size()
-		}
+		testRightBeforeLeft = BySize(xs).Less(0, 1)
+		testLeftBeforeRight = BySize(ys).Less(0, 1)
 	}
 
 	var result []FileEntry
-	if less(right, len(right)-1, left, 0) {
+
+	if testRightBeforeLeft { //less(right, len(right)-1, left, 0)
 		result = append(right, left...)
-	} else if less(left, len(left)-1, right, 0) {
+	} else if testLeftBeforeRight { //less(left, len(left)-1, right, 0)
 		result = append(left, right...)
 	} else {
-		// i, j := 0, 0
-		// for i < len(left) && j < len(right) {
-		// 	if less(left, i, right, j) {
-		// 		result = append(result, left[i])
-		// 		i += 1
-		// 	} else {
-		// 		result = append(result, right[j])
-		// 		j += 1
-		// 	}
-		// }
-
-		// if i < len(left) {
-		// 	result = append(result, left[i:]...)
-		// }
-		// if j < len(right) {
-		// 	result = append(result, right[j:]...)
-		// }
 		result = append(left, right...)
 		switch sorttype {
 		case SORT_BY_NAME:
