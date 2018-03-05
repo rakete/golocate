@@ -90,35 +90,37 @@ func BenchmarkSortBySize(b *testing.B) {
 
 func TestMerge(t *testing.T) {
 	directories := []string{os.Getenv("HOME") + "/go/src/golocate/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/"}
-	var byname, bymodtime, bysize []FileEntry
+	//var byname, bymodtime, bysize []FileEntry
+	var allfiles, byname []FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
 		byname = merge(SORT_BY_NAME, byname, sortFileEntries(ByName(files)).(ByName))
-		bymodtime = merge(SORT_BY_MODTIME, bymodtime, sortFileEntries(ByModTime(files)).(ByModTime))
-		bysize = merge(SORT_BY_SIZE, bysize, sortFileEntries(BySize(files)).(BySize))
+		// bymodtime = merge(SORT_BY_MODTIME, bymodtime, sortFileEntries(ByModTime(files)).(ByModTime))
+		// bysize = merge(SORT_BY_SIZE, bysize, sortFileEntries(BySize(files)).(BySize))
+		allfiles = append(allfiles, files...)
 	}
 
-	if !sort.IsSorted(ByName(byname)) {
+	if !sort.IsSorted(ByName(byname)) || len(byname) < len(allfiles) {
 		log.Println("---- byname ----")
 		for i, entry := range byname {
 			log.Println(i, "\t\t", entry.fileinfo.Name())
 		}
 		log.Println("---- sort.Sort(ByName(byname)) ----")
-		sort.Sort(ByName(byname))
-		for i, entry := range byname {
+		sort.Sort(ByName(allfiles))
+		for i, entry := range allfiles {
 			log.Println(i, "\t\t", entry.fileinfo.Name())
 		}
 
 		t.Error("Not sorted by name after merging")
 	}
 
-	if !sort.IsSorted(ByModTime(bymodtime)) {
-		t.Error("Not sorted by modtime after merging")
-	}
+	// if !sort.IsSorted(ByModTime(bymodtime)) {
+	// 	t.Error("Not sorted by modtime after merging")
+	// }
 
-	if !sort.IsSorted(BySize(bysize)) {
-		t.Error("Not sorted by size after merging")
-	}
+	// if !sort.IsSorted(BySize(bysize)) {
+	// 	t.Error("Not sorted by size after merging")
+	// }
 
 	log.Println("TestMerge finished")
 }
@@ -126,16 +128,22 @@ func TestMerge(t *testing.T) {
 func BenchmarkMergeByName(b *testing.B) {
 	b.StopTimer()
 
-	directories := []string{os.Getenv("HOME") + "/go/src/golocate/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/"}
+	directories := []string{
+		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
+		os.Getenv("HOME") + "/go/src/golocate/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
+		os.Getenv("HOME") + "/.local/share/Trash/files",
+	}
 	var cache [][]FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
 		cache = append(cache, sortFileEntries(ByName(files)).(ByName))
 	}
 
-	var merged []FileEntry
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
+		var merged []FileEntry
 		for _, files := range cache {
 			merged = merge(SORT_BY_NAME, merged, files)
 		}

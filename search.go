@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"sort"
 	//"gotk3/gtk"
+	//"fmt"
 	"runtime"
 )
 
@@ -134,14 +135,50 @@ func merge(sorttype int, left, right []FileEntry) []FileEntry {
 	} else if testLeftBeforeRight { //less(left, len(left)-1, right, 0)
 		result = append(left, right...)
 	} else {
-		result = append(left, right...)
+		// result = append(left, right...)
+		// sort.Stable(ByName(result))
+
+		var queue sort.Interface
 		switch sorttype {
 		case SORT_BY_NAME:
-			sort.Stable(ByName(result))
+			queue = ByName(append(left, right...))
 		case SORT_BY_MODTIME:
-			sort.Stable(ByModTime(result))
+			queue = ByModTime(append(left, right...))
 		case SORT_BY_SIZE:
-			sort.Stable(BySize(result))
+			queue = BySize(append(left, right...))
+		}
+
+		leftqueue := 0
+		rightqueue := len(left)
+		rightindex := 0
+
+		n := len(left)
+		for n > 0 {
+			foundindex := sort.Search(n, func(testindex int) bool {
+				return queue.Less(rightqueue, leftqueue+testindex)
+			})
+
+			if foundindex == n {
+				result = append(result, left[leftqueue:len(left)]...)
+				result = append(result, right[rightindex:len(right)]...)
+				break
+			}
+
+			result = append(result, left[leftqueue:leftqueue+foundindex]...)
+
+			for rightindex < len(right) && queue.Less(rightqueue, leftqueue+foundindex) {
+				result = append(result, right[rightindex])
+				rightindex += 1
+				rightqueue += 1
+			}
+
+			if rightindex >= len(right) {
+				result = append(result, left[leftqueue+foundindex:len(left)]...)
+				break
+			} else {
+				leftqueue = leftqueue + foundindex
+				n = n - foundindex
+			}
 		}
 	}
 
