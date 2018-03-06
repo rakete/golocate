@@ -90,17 +90,21 @@ func BenchmarkSortBySize(b *testing.B) {
 
 func TestMerge(t *testing.T) {
 	directories := []string{os.Getenv("HOME") + "/go/src/golocate/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/"}
-	//var byname, bymodtime, bysize []FileEntry
-	var allfiles, byname []FileEntry
+	var allfiles, byname, bymodtime, bysize []FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
-		byname = merge(SORT_BY_NAME, byname, sortFileEntries(ByName(files)).(ByName))
-		// bymodtime = merge(SORT_BY_MODTIME, bymodtime, sortFileEntries(ByModTime(files)).(ByModTime))
-		// bysize = merge(SORT_BY_SIZE, bysize, sortFileEntries(BySize(files)).(BySize))
 		allfiles = append(allfiles, files...)
+
+		var temp []FileEntry
+		copy(files, temp)
+		byname = merge(SORT_BY_NAME, byname, sortFileEntries(ByName(temp)).(ByName))
+		copy(files, temp)
+		bymodtime = merge(SORT_BY_MODTIME, bymodtime, sortFileEntries(ByModTime(temp)).(ByModTime))
+		copy(files, temp)
+		bysize = merge(SORT_BY_SIZE, bysize, sortFileEntries(BySize(temp)).(BySize))
 	}
 
-	if !sort.IsSorted(ByName(byname)) || len(byname) < len(allfiles) {
+	if !sort.IsSorted(ByName(byname)) {
 		log.Println("---- byname ----")
 		for i, entry := range byname {
 			log.Println(i, "\t\t", entry.fileinfo.Name())
@@ -114,13 +118,13 @@ func TestMerge(t *testing.T) {
 		t.Error("Not sorted by name after merging")
 	}
 
-	// if !sort.IsSorted(ByModTime(bymodtime)) {
-	// 	t.Error("Not sorted by modtime after merging")
-	// }
+	if !sort.IsSorted(ByModTime(bymodtime)) {
+		t.Error("Not sorted by modtime after merging")
+	}
 
-	// if !sort.IsSorted(BySize(bysize)) {
-	// 	t.Error("Not sorted by size after merging")
-	// }
+	if !sort.IsSorted(BySize(bysize)) {
+		t.Error("Not sorted by size after merging")
+	}
 
 	log.Println("TestMerge finished")
 }
@@ -134,6 +138,7 @@ func BenchmarkMergeByName(b *testing.B) {
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
 		os.Getenv("HOME") + "/.local/share/Trash/files",
+		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
 	}
 	var cache [][]FileEntry
 	for _, dir := range directories {
@@ -153,7 +158,14 @@ func BenchmarkMergeByName(b *testing.B) {
 func BenchmarkMergeByModTime(b *testing.B) {
 	b.StopTimer()
 
-	directories := []string{os.Getenv("HOME") + "/go/src/golocate/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/"}
+	directories := []string{
+		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
+		os.Getenv("HOME") + "/go/src/golocate/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
+		os.Getenv("HOME") + "/.local/share/Trash/files",
+		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
+	}
 	var cache [][]FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
@@ -172,7 +184,14 @@ func BenchmarkMergeByModTime(b *testing.B) {
 func BenchmarkMergeBySize(b *testing.B) {
 	b.StopTimer()
 
-	directories := []string{os.Getenv("HOME") + "/go/src/golocate/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/"}
+	directories := []string{
+		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
+		os.Getenv("HOME") + "/go/src/golocate/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
+		os.Getenv("HOME") + "/.local/share/Trash/files",
+		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
+	}
 	var cache [][]FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
