@@ -144,10 +144,10 @@ func setupWindow(display ResultChannel, application *gtk.Application, treeview *
 }
 
 func addEntry(liststore *gtk.ListStore, entry FileEntry) gtk.TreeIter {
-	namestring := path.Join(entry.path, entry.fileinfo.Name())
-	sizestring := fmt.Sprintf("%d", entry.fileinfo.Size())
+	namestring := path.Join(entry.path, entry.name)
+	sizestring := fmt.Sprintf("%d", entry.size)
 
-	modtime := entry.fileinfo.ModTime()
+	modtime := entry.modtime
 	modtimestring := modtime.Format("2006-01-02 15:04:05")
 
 	var iter gtk.TreeIter
@@ -163,10 +163,10 @@ func addEntry(liststore *gtk.ListStore, entry FileEntry) gtk.TreeIter {
 }
 
 func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry FileEntry) {
-	namestring := path.Join(entry.path, entry.fileinfo.Name())
-	sizestring := fmt.Sprintf("%d", entry.fileinfo.Size())
+	namestring := path.Join(entry.path, entry.name)
+	sizestring := fmt.Sprintf("%d", entry.size)
 
-	modtime := entry.fileinfo.ModTime()
+	modtime := entry.modtime
 	modtimestring := modtime.Format("2006-01-02 15:04:05")
 
 	err := liststore.Set(iter,
@@ -180,6 +180,7 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry FileEntry) 
 
 func updateView(liststore *gtk.ListStore, display ResultChannel, sorttype chan int) {
 	var byname, bymodtime, bysize []FileEntry
+	_, _, _ = byname, bymodtime, bysize
 	currentsort := -1
 
 	go func() {
@@ -189,11 +190,8 @@ func updateView(liststore *gtk.ListStore, display ResultChannel, sorttype chan i
 				var entries []FileEntry
 				switch currentsort {
 				case SORT_BY_NAME:
-					entries = byname
 				case SORT_BY_MODTIME:
-					entries = bymodtime
 				case SORT_BY_SIZE:
-					entries = bysize
 				}
 
 				glib.IdleAdd(func() {

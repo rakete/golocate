@@ -21,7 +21,12 @@ func getDirectoryFiles(dir string) []FileEntry {
 				if fileinfo, err := os.Lstat(entrypath); err != nil {
 					log.Println("Could not read file:", err)
 				} else {
-					files = append(files, FileEntry{path: dir, fileinfo: fileinfo})
+					files = append(files, FileEntry{
+						path:    dir,
+						name:    fileinfo.Name(),
+						modtime: fileinfo.ModTime(),
+						size:    fileinfo.Size(),
+					})
 				}
 			}
 		}
@@ -97,22 +102,22 @@ func TestMerge(t *testing.T) {
 
 		var temp []FileEntry
 		copy(files, temp)
-		byname = merge(SORT_BY_NAME, byname, sortFileEntries(ByName(temp)).(ByName))
+		byname = sortMerge(SORT_BY_NAME, byname, sortFileEntries(ByName(temp)).(ByName))
 		copy(files, temp)
-		bymodtime = merge(SORT_BY_MODTIME, bymodtime, sortFileEntries(ByModTime(temp)).(ByModTime))
+		bymodtime = sortMerge(SORT_BY_MODTIME, bymodtime, sortFileEntries(ByModTime(temp)).(ByModTime))
 		copy(files, temp)
-		bysize = merge(SORT_BY_SIZE, bysize, sortFileEntries(BySize(temp)).(BySize))
+		bysize = sortMerge(SORT_BY_SIZE, bysize, sortFileEntries(BySize(temp)).(BySize))
 	}
 
 	if !sort.IsSorted(ByName(byname)) {
 		log.Println("---- byname ----")
 		for i, entry := range byname {
-			log.Println(i, "\t\t", entry.fileinfo.Name())
+			log.Println(i, "\t\t", entry.name)
 		}
 		log.Println("---- sort.Sort(ByName(byname)) ----")
 		sort.Sort(ByName(allfiles))
 		for i, entry := range allfiles {
-			log.Println(i, "\t\t", entry.fileinfo.Name())
+			log.Println(i, "\t\t", entry.name)
 		}
 
 		t.Error("Not sorted by name after merging")
@@ -150,7 +155,7 @@ func BenchmarkMergeByName(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var merged []FileEntry
 		for _, files := range cache {
-			merged = merge(SORT_BY_NAME, merged, files)
+			merged = sortMerge(SORT_BY_NAME, merged, files)
 		}
 	}
 }
@@ -176,7 +181,7 @@ func BenchmarkMergeByModTime(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		for _, files := range cache {
-			merged = merge(SORT_BY_MODTIME, merged, files)
+			merged = sortMerge(SORT_BY_MODTIME, merged, files)
 		}
 	}
 }
@@ -202,7 +207,7 @@ func BenchmarkMergeBySize(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		for _, files := range cache {
-			merged = merge(SORT_BY_SIZE, merged, files)
+			merged = sortMerge(SORT_BY_SIZE, merged, files)
 		}
 	}
 }
