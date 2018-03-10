@@ -75,7 +75,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, dirchan chan string, colle
 	defer wg.Done()
 }
 
-func Search(display ResultChannel, query *regexp.Regexp) {
+func Crawl(display ResultChannel, query *regexp.Regexp) {
 	cores := runtime.NumCPU()
 	log.Println("start search on", cores, "cores")
 

@@ -96,7 +96,7 @@ func setupWindow(display ResultChannel, application *gtk.Application, treeview *
 	aSearch.Connect("activate", func() {
 		go func() {
 			glib.IdleAdd(liststore.Clear)
-			Search(display, nil)
+			Crawl(display, nil)
 		}()
 	})
 	application.AddAction(aSearch)
