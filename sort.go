@@ -23,7 +23,7 @@ type ByModTime []FileEntry
 func (a ByModTime) Len() int      { return len(a) }
 func (a ByModTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a ByModTime) Less(i, j int) bool {
-	return a[i].modtime.Before(a[j].modtime)
+	return a[i].modtime < a[j].modtime
 }
 
 type BySize []FileEntry

@@ -24,7 +24,7 @@ func getDirectoryFiles(dir string) []FileEntry {
 					files = append(files, FileEntry{
 						path:    dir,
 						name:    fileinfo.Name(),
-						modtime: fileinfo.ModTime(),
+						modtime: fileinfo.ModTime().Unix(),
 						size:    fileinfo.Size(),
 					})
 				}

@@ -148,7 +148,7 @@ func addEntry(liststore *gtk.ListStore, entry FileEntry) gtk.TreeIter {
 	sizestring := fmt.Sprintf("%d", entry.size)
 
 	modtime := entry.modtime
-	modtimestring := modtime.Format("2006-01-02 15:04:05")
+	modtimestring := time.Unix(modtime, 0).Format("2006-01-02 15:04:05")
 
 	var iter gtk.TreeIter
 	err := liststore.InsertWithValues(&iter, -1,
@@ -167,7 +167,7 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry FileEntry) 
 	sizestring := fmt.Sprintf("%d", entry.size)
 
 	modtime := entry.modtime
-	modtimestring := modtime.Format("2006-01-02 15:04:05")
+	modtimestring := time.Unix(modtime, 0).Format("2006-01-02 15:04:05")
 
 	err := liststore.Set(iter,
 		[]int{COLUMN_FILENAME, COLUMN_SIZE, COLUMN_MODTIME},
