@@ -96,7 +96,12 @@ func setupWindow(display ResultChannel, application *gtk.Application, treeview *
 	aSearch.Connect("activate", func() {
 		go func() {
 			glib.IdleAdd(liststore.Clear)
-			Crawl(display, nil)
+			empty := ResultMemory{
+				new(FileEntries),
+				new(FileEntries),
+				new(FileEntries),
+			}
+			Crawl(empty, display, nil)
 		}()
 	})
 	application.AddAction(aSearch)
@@ -233,7 +238,7 @@ func main() {
 		log.Fatal("Could not create application:", err)
 	}
 
-	display := ResultChannel{make(chan ByName), make(chan ByModTime), make(chan BySize)}
+	display := ResultChannel{make(chan CrawlResult), make(chan CrawlResult), make(chan CrawlResult)}
 
 	var liststore *gtk.ListStore
 	var treeview *gtk.TreeView

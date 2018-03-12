@@ -20,13 +20,46 @@ type FileEntry struct {
 	size    int64
 }
 
-type ResultChannel struct {
-	byname    chan ByName
-	bymodtime chan ByModTime
-	bysize    chan BySize
+type FilesChannel struct {
+	byname    chan SortedByName
+	bymodtime chan SortedByModTime
+	bysize    chan SortedBySize
 }
 
-func visit(wg *sync.WaitGroup, maxproc chan struct{}, dirchan chan string, collect ResultChannel, dir string, query *regexp.Regexp) {
+type ResultChannel struct {
+	byname    chan CrawlResult
+	bymodtime chan CrawlResult
+	bysize    chan CrawlResult
+}
+
+type ResultMemory struct {
+	byname    CrawlResult
+	bymodtime CrawlResult
+	bysize    CrawlResult
+}
+
+type CrawlResult interface {
+	Initialize(sorttype int) CrawlResult
+	Merge(sorttype int, files []*FileEntry)
+	Len() int
+}
+
+type FileEntries []*FileEntry
+
+func (r *FileEntries) Initialize(sorttype int) CrawlResult {
+	return new(FileEntries)
+}
+
+func (r *FileEntries) Merge(sorttype int, files []*FileEntry) {
+	//return FileEntries(sortMerge(sorttype, r, files))
+	*r = FileEntries(append(*r, files...))
+}
+
+func (r *FileEntries) Len() int {
+	return len(*r)
+}
+
+func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, collect FilesChannel, dir string, query *regexp.Regexp) {
 	entries, err := ioutil.ReadDir(dir)
 	<-maxproc
 
@@ -37,7 +70,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, dirchan chan string, colle
 		for _, entry := range entries {
 			entrypath := path.Join(dir, entry.Name())
 			if entry.IsDir() {
-				dirchan <- entrypath
+				newdirs <- entrypath
 			} else if query == nil || query.MatchString(entrypath) {
 				matches = append(matches, entrypath)
 			}
@@ -74,7 +107,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, dirchan chan string, colle
 	defer wg.Done()
 }
 
-func Crawl(display ResultChannel, query *regexp.Regexp) {
+func Crawl(mem ResultMemory, display ResultChannel, query *regexp.Regexp) {
 	cores := runtime.NumCPU()
 	log.Println("start search on", cores, "cores")
 
@@ -82,17 +115,17 @@ func Crawl(display ResultChannel, query *regexp.Regexp) {
 
 	var wg sync.WaitGroup
 
-	dirchan := make(chan string)
-	collect := ResultChannel{make(chan ByName), make(chan ByModTime), make(chan BySize)}
+	newdirs := make(chan string)
+	collect := FilesChannel{make(chan SortedByName), make(chan SortedByModTime), make(chan SortedBySize)}
 	finish := make(chan struct{})
 	maxproc := make(chan struct{}, cores*2)
 	go func() {
 		for {
 			select {
-			case dir := <-dirchan:
+			case dir := <-newdirs:
 				maxproc <- struct{}{}
 				wg.Add(1)
-				go visit(&wg, maxproc, dirchan, collect, dir, query)
+				go visit(&wg, maxproc, newdirs, collect, dir, query)
 			case <-finish:
 				return
 			}
@@ -100,53 +133,50 @@ func Crawl(display ResultChannel, query *regexp.Regexp) {
 
 	}()
 
-	var resultsbyname []FileEntry
 	go func() {
 		for {
 			select {
 			case newbyname := <-collect.byname:
-				resultsbyname = sortMerge(SORT_BY_NAME, resultsbyname, newbyname)
-				display.byname <- resultsbyname
+				mem.byname.Merge(SORT_BY_NAME, newbyname)
+				display.byname <- mem.byname
 				wg.Done()
 			case <-finish:
-				log.Println("resultsbyname", len(resultsbyname))
+				log.Println("mem.byname", mem.byname.Len())
 				return
 			}
 		}
 	}()
 
-	var resultsbymodtime []FileEntry
 	go func() {
 		for {
 			select {
 			case newbymodtime := <-collect.bymodtime:
-				resultsbymodtime = sortMerge(SORT_BY_MODTIME, resultsbymodtime, newbymodtime)
-				display.bymodtime <- resultsbymodtime
+				mem.bymodtime.Merge(SORT_BY_MODTIME, newbymodtime)
+				display.bymodtime <- mem.bymodtime
 				wg.Done()
 			case <-finish:
-				log.Println("resultsbymodtime", len(resultsbymodtime))
+				log.Println("mem.bymodtime", mem.bymodtime.Len())
 				return
 			}
 		}
 	}()
 
-	var resultsbysize []FileEntry
 	go func() {
 		for {
 			select {
 			case newbysize := <-collect.bysize:
-				resultsbysize = sortMerge(SORT_BY_SIZE, resultsbysize, newbysize)
-				display.bysize <- resultsbysize
+				mem.bysize.Merge(SORT_BY_SIZE, newbysize)
+				display.bysize <- mem.bysize
 				wg.Done()
 			case <-finish:
-				log.Println("resultsbysize:", len(resultsbysize))
+				log.Println("mem.bysize:", mem.bysize.Len())
 				return
 			}
 		}
 	}()
 
 	for _, dir := range userDirectories {
-		dirchan <- dir
+		newdirs <- dir
 	}
 
 	wg.Wait()
