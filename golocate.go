@@ -179,7 +179,7 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry FileEntry) 
 }
 
 func updateView(liststore *gtk.ListStore, display ResultChannel, sorttype chan int) {
-	var byname, bymodtime, bysize []FileEntry
+	var byname, bymodtime, bysize FileEntries
 	_, _, _ = byname, bymodtime, bysize
 	currentsort := -1
 
@@ -216,9 +216,12 @@ func updateView(liststore *gtk.ListStore, display ResultChannel, sorttype chan i
 	for {
 		select {
 		case currentsort = <-sorttype:
-		case byname = <-display.byname:
-		case bymodtime = <-display.bymodtime:
-		case bysize = <-display.bysize:
+		case files := <-display.byname:
+			byname = *files.(*FileEntries)
+		case files := <-display.bymodtime:
+			bymodtime = *files.(*FileEntries)
+		case files := <-display.bysize:
+			bysize = *files.(*FileEntries)
 		}
 	}
 }

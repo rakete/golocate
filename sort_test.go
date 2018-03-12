@@ -6,12 +6,13 @@ import (
 	"os"
 	"path"
 	"sort"
+	"time"
 
 	"testing"
 )
 
-func getDirectoryFiles(dir string) []FileEntry {
-	var files []FileEntry
+func getDirectoryFiles(dir string) []*FileEntry {
+	var files []*FileEntry
 	if entries, err := ioutil.ReadDir(dir); err != nil {
 		log.Println("Could not read dir:", err)
 	} else {
@@ -21,7 +22,7 @@ func getDirectoryFiles(dir string) []FileEntry {
 				if fileinfo, err := os.Lstat(entrypath); err != nil {
 					log.Println("Could not read file:", err)
 				} else {
-					files = append(files, FileEntry{
+					files = append(files, &FileEntry{
 						path:    dir,
 						name:    fileinfo.Name(),
 						modtime: fileinfo.ModTime().Unix(),
@@ -42,17 +43,17 @@ func getDirectoryFiles(dir string) []FileEntry {
 func TestSort(t *testing.T) {
 	files := getDirectoryFiles("/tmp")
 
-	byname := sortFileEntries(ByName(files))
+	byname := sortFileEntries(SortedByName(files))
 	if !sort.IsSorted(byname) {
 		t.Error("Not sorted by name!")
 	}
 
-	bymodtime := sortFileEntries(ByModTime(files))
+	bymodtime := sortFileEntries(SortedByModTime(files))
 	if !sort.IsSorted(bymodtime) {
 		t.Error("Not sorted by modtime!")
 	}
 
-	bysize := sortFileEntries(BySize(files))
+	bysize := sortFileEntries(SortedBySize(files))
 	if !sort.IsSorted(bysize) {
 		t.Error("Not sorted by size!")
 	}
@@ -60,62 +61,62 @@ func TestSort(t *testing.T) {
 	log.Println("TestSort finished")
 }
 
-func BenchmarkSortByName(b *testing.B) {
+func BenchmarkSortedByName(b *testing.B) {
 	b.StopTimer()
 
 	files := getDirectoryFiles("/tmp")
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(ByName(files))
+		sortFileEntries(SortedByName(files))
 	}
 }
 
-func BenchmarkSortByModTime(b *testing.B) {
+func BenchmarkSortedByModTime(b *testing.B) {
 	b.StopTimer()
 
 	files := getDirectoryFiles("/tmp")
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(ByModTime(files))
+		sortFileEntries(SortedByModTime(files))
 	}
 }
 
-func BenchmarkSortBySize(b *testing.B) {
+func BenchmarkSortedBySize(b *testing.B) {
 	b.StopTimer()
 
 	files := getDirectoryFiles("/tmp")
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(BySize(files))
+		sortFileEntries(SortedBySize(files))
 	}
 }
 
-func TestMerge(t *testing.T) {
+func TestSortMerge(t *testing.T) {
 	directories := []string{os.Getenv("HOME") + "/go/src/golocate/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/"}
-	var allfiles, byname, bymodtime, bysize []FileEntry
+	var allfiles, byname, bymodtime, bysize []*FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
 		allfiles = append(allfiles, files...)
 
-		var temp []FileEntry
+		var temp []*FileEntry
 		copy(files, temp)
-		byname = sortMerge(SORT_BY_NAME, byname, sortFileEntries(ByName(temp)).(ByName))
+		byname = sortMerge(SORT_BY_NAME, byname, sortFileEntries(SortedByName(temp)).(SortedByName))
 		copy(files, temp)
-		bymodtime = sortMerge(SORT_BY_MODTIME, bymodtime, sortFileEntries(ByModTime(temp)).(ByModTime))
+		bymodtime = sortMerge(SORT_BY_MODTIME, bymodtime, sortFileEntries(SortedByModTime(temp)).(SortedByModTime))
 		copy(files, temp)
-		bysize = sortMerge(SORT_BY_SIZE, bysize, sortFileEntries(BySize(temp)).(BySize))
+		bysize = sortMerge(SORT_BY_SIZE, bysize, sortFileEntries(SortedBySize(temp)).(SortedBySize))
 	}
 
-	if !sort.IsSorted(ByName(byname)) {
+	if !sort.IsSorted(SortedByName(byname)) {
 		log.Println("---- byname ----")
 		for i, entry := range byname {
 			log.Println(i, "\t\t", entry.name)
 		}
-		log.Println("---- sort.Sort(ByName(byname)) ----")
-		sort.Sort(ByName(allfiles))
+		log.Println("---- sort.Sort(SortedByName(byname)) ----")
+		sort.Sort(SortedByName(allfiles))
 		for i, entry := range allfiles {
 			log.Println(i, "\t\t", entry.name)
 		}
@@ -123,18 +124,18 @@ func TestMerge(t *testing.T) {
 		t.Error("Not sorted by name after merging")
 	}
 
-	if !sort.IsSorted(ByModTime(bymodtime)) {
+	if !sort.IsSorted(SortedByModTime(bymodtime)) {
 		t.Error("Not sorted by modtime after merging")
 	}
 
-	if !sort.IsSorted(BySize(bysize)) {
+	if !sort.IsSorted(SortedBySize(bysize)) {
 		t.Error("Not sorted by size after merging")
 	}
 
-	log.Println("TestMerge finished")
+	log.Println("TestSortMerge finished")
 }
 
-func BenchmarkMergeByName(b *testing.B) {
+func BenchmarkSortMergeByName(b *testing.B) {
 	b.StopTimer()
 
 	directories := []string{
@@ -143,24 +144,23 @@ func BenchmarkMergeByName(b *testing.B) {
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
 		os.Getenv("HOME") + "/.local/share/Trash/files",
-		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
 	}
-	var cache [][]FileEntry
+	var cache [][]*FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
-		cache = append(cache, sortFileEntries(ByName(files)).(ByName))
+		cache = append(cache, sortFileEntries(SortedByName(files)).(SortedByName))
 	}
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		var merged []FileEntry
+		var merged []*FileEntry
 		for _, files := range cache {
 			merged = sortMerge(SORT_BY_NAME, merged, files)
 		}
 	}
 }
 
-func BenchmarkMergeByModTime(b *testing.B) {
+func BenchmarkSortMergeByModTime(b *testing.B) {
 	b.StopTimer()
 
 	directories := []string{
@@ -169,24 +169,23 @@ func BenchmarkMergeByModTime(b *testing.B) {
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
 		os.Getenv("HOME") + "/.local/share/Trash/files",
-		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
 	}
-	var cache [][]FileEntry
+	var cache [][]*FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
-		cache = append(cache, sortFileEntries(ByModTime(files)).(ByModTime))
+		cache = append(cache, sortFileEntries(SortedByModTime(files)).(SortedByModTime))
 	}
 
-	var merged []FileEntry
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
+		var merged []*FileEntry
 		for _, files := range cache {
 			merged = sortMerge(SORT_BY_MODTIME, merged, files)
 		}
 	}
 }
 
-func BenchmarkMergeBySize(b *testing.B) {
+func BenchmarkSortMergeBySize(b *testing.B) {
 	b.StopTimer()
 
 	directories := []string{
@@ -195,19 +194,27 @@ func BenchmarkMergeBySize(b *testing.B) {
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
 		os.Getenv("HOME") + "/.local/share/Trash/files",
-		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
 	}
-	var cache [][]FileEntry
+	var cache [][]*FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles(dir)
-		cache = append(cache, sortFileEntries(BySize(files)).(BySize))
+		cache = append(cache, sortFileEntries(SortedBySize(files)).(SortedBySize))
 	}
 
-	var merged []FileEntry
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
+		var merged []*FileEntry
 		for _, files := range cache {
 			merged = sortMerge(SORT_BY_SIZE, merged, files)
 		}
+	}
+}
+
+func BenchmarkInt64(b *testing.B) {
+	u := int64(time.Now().Unix())
+	v := int64(time.Now().Unix())
+	var results []bool
+	for i := 0; i < b.N; i++ {
+		results = append(results, u < v)
 	}
 }
