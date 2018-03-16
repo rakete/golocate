@@ -96,12 +96,14 @@ func setupWindow(display ResultChannel, application *gtk.Application, treeview *
 	aSearch.Connect("activate", func() {
 		go func() {
 			glib.IdleAdd(liststore.Clear)
-			empty := ResultMemory{
-				new(FileEntries),
-				new(FileEntries),
-				new(FileEntries),
+			mem := ResultMemory{
+				NewFileEntries(),
+				NewFileEntries(),
+				NewFileEntries(),
 			}
-			Crawl(empty, display, nil)
+			finish := make(chan struct{})
+			directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
+			Crawl(mem, display, finish, directories, nil)
 		}()
 	})
 	application.AddAction(aSearch)

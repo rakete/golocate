@@ -105,17 +105,14 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	defer wg.Done()
 }
 
-func Crawl(mem ResultMemory, display ResultChannel, query *regexp.Regexp) {
+func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, directories []string, query *regexp.Regexp) {
 	cores := runtime.NumCPU()
 	log.Println("start search on", cores, "cores")
-
-	userDirectories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
 
 	var wg sync.WaitGroup
 
 	newdirs := make(chan string)
 	collect := FilesChannel{make(chan SortedByName), make(chan SortedByModTime), make(chan SortedBySize)}
-	finish := make(chan struct{})
 	maxproc := make(chan struct{}, cores*2)
 	go func() {
 		for {
@@ -173,7 +170,7 @@ func Crawl(mem ResultMemory, display ResultChannel, query *regexp.Regexp) {
 		}
 	}()
 
-	for _, dir := range userDirectories {
+	for _, dir := range directories {
 		newdirs <- dir
 	}
 
