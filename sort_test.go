@@ -11,29 +11,31 @@ import (
 	"testing"
 )
 
-func getDirectoryFiles(dir string) []*FileEntry {
+func getDirectoryFiles(dirs []string) []*FileEntry {
 	var files []*FileEntry
-	if entries, err := ioutil.ReadDir(dir); err != nil {
-		log.Println("Could not read dir:", err)
-	} else {
-		for _, entry := range entries {
-			entrypath := path.Join(dir, entry.Name())
-			if !entry.IsDir() {
-				if fileinfo, err := os.Lstat(entrypath); err != nil {
-					log.Println("Could not read file:", err)
-				} else {
-					files = append(files, &FileEntry{
-						path:    dir,
-						name:    fileinfo.Name(),
-						modtime: fileinfo.ModTime().Unix(),
-						size:    fileinfo.Size(),
-					})
+	for _, dir := range dirs {
+		if entries, err := ioutil.ReadDir(dir); err != nil {
+			log.Println("Could not read dir:", err)
+		} else {
+			for _, entry := range entries {
+				entrypath := path.Join(dir, entry.Name())
+				if !entry.IsDir() {
+					if fileinfo, err := os.Lstat(entrypath); err != nil {
+						log.Println("Could not read file:", err)
+					} else {
+						files = append(files, &FileEntry{
+							path:    dir,
+							name:    fileinfo.Name(),
+							modtime: fileinfo.ModTime().Unix(),
+							size:    fileinfo.Size(),
+						})
+					}
 				}
 			}
-		}
 
-		if len(files) < 2 {
-			log.Println("Not enough files in", dir)
+			if len(files) < 2 {
+				log.Println("Not enough files in", dir)
+			}
 		}
 	}
 
@@ -41,7 +43,7 @@ func getDirectoryFiles(dir string) []*FileEntry {
 }
 
 func TestSort(t *testing.T) {
-	files := getDirectoryFiles("/tmp")
+	files := getDirectoryFiles([]string{"/tmp"})
 
 	byname := sortFileEntries(SortedByName(files))
 	if !sort.IsSorted(byname) {
@@ -64,7 +66,7 @@ func TestSort(t *testing.T) {
 func BenchmarkSortedByName(b *testing.B) {
 	b.StopTimer()
 
-	files := getDirectoryFiles("/tmp")
+	files := getDirectoryFiles([]string{"/tmp"})
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -75,7 +77,7 @@ func BenchmarkSortedByName(b *testing.B) {
 func BenchmarkSortedByModTime(b *testing.B) {
 	b.StopTimer()
 
-	files := getDirectoryFiles("/tmp")
+	files := getDirectoryFiles([]string{"/tmp"})
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -86,7 +88,7 @@ func BenchmarkSortedByModTime(b *testing.B) {
 func BenchmarkSortedBySize(b *testing.B) {
 	b.StopTimer()
 
-	files := getDirectoryFiles("/tmp")
+	files := getDirectoryFiles([]string{"/tmp"})
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -98,7 +100,7 @@ func TestSortMerge(t *testing.T) {
 	directories := []string{os.Getenv("HOME") + "/go/src/golocate/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/"}
 	var allfiles, byname, bymodtime, bysize []*FileEntry
 	for _, dir := range directories {
-		files := getDirectoryFiles(dir)
+		files := getDirectoryFiles([]string{dir})
 		allfiles = append(allfiles, files...)
 
 		var temp []*FileEntry
@@ -147,7 +149,7 @@ func BenchmarkSortMergeByName(b *testing.B) {
 	}
 	var cache [][]*FileEntry
 	for _, dir := range directories {
-		files := getDirectoryFiles(dir)
+		files := getDirectoryFiles([]string{dir})
 		cache = append(cache, sortFileEntries(SortedByName(files)).(SortedByName))
 	}
 
@@ -172,7 +174,7 @@ func BenchmarkSortMergeByModTime(b *testing.B) {
 	}
 	var cache [][]*FileEntry
 	for _, dir := range directories {
-		files := getDirectoryFiles(dir)
+		files := getDirectoryFiles([]string{dir})
 		cache = append(cache, sortFileEntries(SortedByModTime(files)).(SortedByModTime))
 	}
 
@@ -197,7 +199,7 @@ func BenchmarkSortMergeBySize(b *testing.B) {
 	}
 	var cache [][]*FileEntry
 	for _, dir := range directories {
-		files := getDirectoryFiles(dir)
+		files := getDirectoryFiles([]string{dir})
 		cache = append(cache, sortFileEntries(SortedBySize(files)).(SortedBySize))
 	}
 
