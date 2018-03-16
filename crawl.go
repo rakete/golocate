@@ -39,24 +39,22 @@ type ResultMemory struct {
 }
 
 type CrawlResult interface {
-	Initialize(sorttype int) CrawlResult
-	Merge(sorttype int, files []*FileEntry)
+	Merge(files []*FileEntry)
 	Len() int
 }
 
 type FileEntries []*FileEntry
 
-func (r *FileEntries) Initialize(sorttype int) CrawlResult {
+func NewFileEntries() *FileEntries {
 	return new(FileEntries)
 }
 
-func (r *FileEntries) Merge(sorttype int, files []*FileEntry) {
-	//return FileEntries(sortMerge(sorttype, r, files))
-	*r = FileEntries(append(*r, files...))
+func (entries *FileEntries) Merge(files []*FileEntry) {
+	*entries = FileEntries(append(*entries, files...))
 }
 
-func (r *FileEntries) Len() int {
-	return len(*r)
+func (entries *FileEntries) Len() int {
+	return len(*entries)
 }
 
 func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, collect FilesChannel, dir string, query *regexp.Regexp) {
@@ -137,7 +135,7 @@ func Crawl(mem ResultMemory, display ResultChannel, query *regexp.Regexp) {
 		for {
 			select {
 			case newbyname := <-collect.byname:
-				mem.byname.Merge(SORT_BY_NAME, newbyname)
+				mem.byname.Merge(newbyname)
 				display.byname <- mem.byname
 				wg.Done()
 			case <-finish:
@@ -151,7 +149,7 @@ func Crawl(mem ResultMemory, display ResultChannel, query *regexp.Regexp) {
 		for {
 			select {
 			case newbymodtime := <-collect.bymodtime:
-				mem.bymodtime.Merge(SORT_BY_MODTIME, newbymodtime)
+				mem.bymodtime.Merge(newbymodtime)
 				display.bymodtime <- mem.bymodtime
 				wg.Done()
 			case <-finish:
@@ -165,7 +163,7 @@ func Crawl(mem ResultMemory, display ResultChannel, query *regexp.Regexp) {
 		for {
 			select {
 			case newbysize := <-collect.bysize:
-				mem.bysize.Merge(SORT_BY_SIZE, newbysize)
+				mem.bysize.Merge(newbysize)
 				display.bysize <- mem.bysize
 				wg.Done()
 			case <-finish:
