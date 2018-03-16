@@ -64,10 +64,13 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	if err != nil {
 		//log.Println("Could not read directory:", err)
 	} else {
+		wg.Add(3)
+
 		var matches []string
 		for _, entry := range entries {
 			entrypath := path.Join(dir, entry.Name())
 			if entry.IsDir() {
+				wg.Add(1)
 				newdirs <- entrypath
 			} else if query == nil || query.MatchString(entrypath) {
 				matches = append(matches, entrypath)
@@ -89,24 +92,30 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 			}
 		}
 
-		wg.Add(1)
-		go func() {
-			byname := make([]*FileEntry, len(files))
-			copy(byname, files)
-			collect.byname <- sortFileEntries(SortedByName(byname)).(SortedByName)
-		}()
-		wg.Add(1)
-		go func() {
-			bymodtime := make([]*FileEntry, len(files))
-			copy(bymodtime, files)
-			collect.bymodtime <- sortFileEntries(SortedByModTime(bymodtime)).(SortedByModTime)
-		}()
-		wg.Add(1)
-		go func() {
-			bysize := make([]*FileEntry, len(files))
-			copy(bysize, files)
-			collect.bysize <- sortFileEntries(SortedBySize(bysize)).(SortedBySize)
-		}()
+		if len(files) > 0 {
+			go func() {
+				byname := make([]*FileEntry, len(files))
+				copy(byname, files)
+				collect.byname <- sortFileEntries(SortedByName(byname)).(SortedByName)
+			}()
+			go func() {
+				bymodtime := make([]*FileEntry, len(files))
+				copy(bymodtime, files)
+				collect.bymodtime <- sortFileEntries(SortedByModTime(bymodtime)).(SortedByModTime)
+			}()
+			go func() {
+				bysize := make([]*FileEntry, len(files))
+				copy(bysize, files)
+				collect.bysize <- sortFileEntries(SortedBySize(bysize)).(SortedBySize)
+			}()
+		} else {
+			defer func() {
+				wg.Done()
+				wg.Done()
+				wg.Done()
+			}()
+		}
+
 	}
 
 	defer wg.Done()
@@ -114,7 +123,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 
 func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, directories []string, query *regexp.Regexp) {
 	cores := runtime.NumCPU()
-	log.Println("start search on", cores, "cores")
+	log.Println("start Crawl on", cores, "cores")
 
 	var wg sync.WaitGroup
 
@@ -126,7 +135,6 @@ func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, direct
 			select {
 			case dir := <-newdirs:
 				maxproc <- struct{}{}
-				wg.Add(1)
 				go visit(&wg, maxproc, newdirs, collect, dir, query)
 			case <-finish:
 				return
@@ -178,11 +186,12 @@ func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, direct
 	}()
 
 	for _, dir := range directories {
+		wg.Add(1)
 		newdirs <- dir
 	}
 
 	wg.Wait()
+	log.Println("close finish in Crawl")
 	close(finish)
-	log.Println("close finish in search")
 
 }
