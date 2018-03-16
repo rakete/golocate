@@ -79,26 +79,33 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 			if fileinfo, err := os.Lstat(entrypath); err != nil {
 				log.Println("Could not read file:", err)
 			} else {
-				files = append(files, &FileEntry{
+				entry := &FileEntry{
 					path:    dir,
 					name:    fileinfo.Name(),
 					modtime: fileinfo.ModTime().Unix(),
 					size:    fileinfo.Size(),
-				})
+				}
+				files = append(files, entry)
 			}
 		}
 
 		wg.Add(1)
 		go func() {
-			collect.byname <- sortFileEntries(SortedByName(files)).(SortedByName)
+			byname := make([]*FileEntry, len(files))
+			copy(byname, files)
+			collect.byname <- sortFileEntries(SortedByName(byname)).(SortedByName)
 		}()
 		wg.Add(1)
 		go func() {
-			collect.bymodtime <- sortFileEntries(SortedByModTime(files)).(SortedByModTime)
+			bymodtime := make([]*FileEntry, len(files))
+			copy(bymodtime, files)
+			collect.bymodtime <- sortFileEntries(SortedByModTime(bymodtime)).(SortedByModTime)
 		}()
 		wg.Add(1)
 		go func() {
-			collect.bysize <- sortFileEntries(SortedBySize(files)).(SortedBySize)
+			bysize := make([]*FileEntry, len(files))
+			copy(bysize, files)
+			collect.bysize <- sortFileEntries(SortedBySize(bysize)).(SortedBySize)
 		}()
 	}
 
