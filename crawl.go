@@ -10,7 +10,6 @@ import (
 	"sync"
 	//"gotk3/gtk"
 	//"fmt"
-	"runtime"
 )
 
 type FileEntry struct {
@@ -121,9 +120,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	defer wg.Done()
 }
 
-func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, directories []string, query *regexp.Regexp) {
-	cores := runtime.NumCPU()
-	log.Println("start Crawl on", cores, "cores")
+func Crawl(cores int, mem ResultMemory, display ResultChannel, finish chan struct{}, directories []string, query *regexp.Regexp) {
 
 	var wg sync.WaitGroup
 
@@ -151,7 +148,6 @@ func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, direct
 				display.byname <- mem.byname
 				wg.Done()
 			case <-finish:
-				log.Println("mem.byname", mem.byname.Len())
 				return
 			}
 		}
@@ -165,7 +161,6 @@ func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, direct
 				display.bymodtime <- mem.bymodtime
 				wg.Done()
 			case <-finish:
-				log.Println("mem.bymodtime", mem.bymodtime.Len())
 				return
 			}
 		}
@@ -179,7 +174,6 @@ func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, direct
 				display.bysize <- mem.bysize
 				wg.Done()
 			case <-finish:
-				log.Println("mem.bysize:", mem.bysize.Len())
 				return
 			}
 		}
@@ -191,7 +185,6 @@ func Crawl(mem ResultMemory, display ResultChannel, finish chan struct{}, direct
 	}
 
 	wg.Wait()
-	log.Println("close finish in Crawl")
 	close(finish)
 
 }

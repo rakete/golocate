@@ -2,6 +2,8 @@ package main
 
 import (
 	//"os"
+	"log"
+	"runtime"
 
 	"testing"
 )
@@ -30,10 +32,12 @@ func BenchmarkCrawl(b *testing.B) {
 	}()
 	directories := []string{"/tmp"}
 
+	cores := runtime.NumCPU()
+	log.Println("start Crawl on", cores, "cores")
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
-		Crawl(mem, display, finish, directories, nil)
+		Crawl(cores, mem, display, finish, directories, nil)
 		<-finish
 	}
 }
