@@ -41,9 +41,17 @@ type Node struct {
 	children  []Bucket
 }
 
+const (
+	BUCKET_ASCENDING = iota
+	BUCKET_DESCENDING
+)
+
 type Bucket interface {
 	Insert(first int, files []*FileEntry) int
 	Split(numparts int)
+	//Sort()
+	Walk(direction int, f func(entry *FileEntry) bool) bool
+	//Take(direction int, n int) []*FileEntry
 	Print(level int)
 }
 
@@ -61,7 +69,10 @@ func (node *NameBucket) Merge(files []*FileEntry)                 {}
 func (node *NameBucket) Len() int                                 { return 0 }
 func (node *NameBucket) Insert(first int, files []*FileEntry) int { return 0 }
 func (node *NameBucket) Split(numparts int)                       {}
-func (node *NameBucket) Print(level int)                          {}
+func (node *NameBucket) Walk(direction int, f func(entry *FileEntry) bool) bool {
+	return false
+}
+func (node *NameBucket) Print(level int) {}
 
 func NewTimeBucket() *TimeBucket {
 	bucket := new(TimeBucket)
@@ -73,7 +84,10 @@ func (node *TimeBucket) Merge(files []*FileEntry)                 {}
 func (node *TimeBucket) Len() int                                 { return 0 }
 func (node *TimeBucket) Insert(first int, files []*FileEntry) int { return 0 }
 func (node *TimeBucket) Split(numparts int)                       {}
-func (node *TimeBucket) Print(level int)                          {}
+func (node *TimeBucket) Walk(direction int, f func(entry *FileEntry) bool) bool {
+	return false
+}
+func (node *TimeBucket) Print(level int) {}
 
 func NewSizeBucket() *SizeBucket {
 	bucket := new(SizeBucket)
@@ -107,11 +121,6 @@ func (node *SizeBucket) Len() int {
 }
 
 func (node *SizeBucket) Insert(first int, files []*FileEntry) int {
-	//fmt.Println("Insert")
-	// if !sort.IsSorted(SortedBySize(files)) {
-	// 	panic("sort")
-	// }
-
 	i := first
 	for _, childnode := range node.children {
 		childthreshold := childnode.(*SizeBucket).threshold
@@ -120,33 +129,12 @@ func (node *SizeBucket) Insert(first int, files []*FileEntry) int {
 				i = childnode.Insert(i, files)
 			} else {
 				childnode.(*SizeBucket).queue = append(childnode.(*SizeBucket).queue, files[i])
-				//fmt.Println("append:", files[i].size, childthreshold)
-				// for test := 0; test < ci; test++ {
-				// 	testthreshold := node.children[test].(*SizeBucket).threshold
-				// 	if (SizeThreshold{files[i].size, files[i].name}).Less(testthreshold) {
-				// 		fmt.Println(files[i].size, test, ci, i, testthreshold, childthreshold)
-				// 		panic("insert")
-				// 	}
-				// }
 				i += 1
 			}
+		}
 
-			if len(childnode.(*SizeBucket).queue) >= 10000 {
-				childnode.Split(10)
-				// if len(childnode.(*SizeBucket).queue) > 0 || len(childnode.(*SizeBucket).sorted) > 0 {
-				// 	panic("len")
-				// }
-				// if ci > 0 && len(childnode.(*SizeBucket).children) > 0 {
-				// 	ta := childnode.(*SizeBucket).children[0].(*SizeBucket).threshold
-				// 	tb := node.children[ci-1].(*SizeBucket).threshold
-				// 	if ta.Less(tb) {
-				// 		fmt.Println(ta, tb)
-				// 		panic("lala")
-				// 	} else {
-				// 		fmt.Println("split", childthreshold)
-				// 	}
-				// }
-			}
+		if len(childnode.(*SizeBucket).queue) >= 100000 {
+			childnode.Split(10)
 		}
 
 		if i >= len(files) {
@@ -171,50 +159,67 @@ func (node *SizeBucket) Split(numparts int) {
 	}
 
 	node.queue = sortFileEntries(SortedBySize(node.queue)).(SortedBySize)
-	// if !sort.IsSorted(SortedBySize(node.queue)) {
-	// 	panic("sort2")
-	// }
-	// if !sort.IsSorted(SortedBySize(node.sorted)) {
-	// 	panic("sort3")
-	// }
 	node.sorted = sortMerge(SORT_BY_SIZE, node.sorted, node.queue)
-	// if !sort.IsSorted(SortedBySize(node.sorted)) {
-	// 	panic("sort4")
-	// }
-	// node.sorted = append(node.sorted, node.queue...)
-	// node.sorted = sortFileEntries(SortedBySize(node.sorted)).(SortedBySize)
 	node.queue = nil
+
+	if node.sorted[0].size == node.sorted[len(node.sorted)-1].size {
+		return
+	}
 
 	inc := len(node.sorted) / numparts
 	a := 0
 	b := inc
 	for i := 0; i < numparts-1; i++ {
 		pivot := node.sorted[b]
-		node.children = append(node.children, &SizeBucket{
+		newnode := &SizeBucket{
 			threshold: SizeThreshold{pivot.size, pivot.name},
 			queue:     nil,
-			sorted:    node.sorted[a:b],
+			sorted:    make([]*FileEntry, b-a),
 			children:  nil,
-		})
-		//fmt.Println("newchild:", SizeThreshold{pivot.size, pivot.name}, node.sorted[a].size, node.sorted[a].name)
+		}
+		copy(newnode.sorted, node.sorted[a:b])
+		node.children = append(node.children, newnode)
 		a = b
 		b += inc
 	}
-	node.children = append(node.children, &SizeBucket{
+	lastnode := &SizeBucket{
 		threshold: node.threshold,
 		queue:     nil,
-		sorted:    node.sorted[a:len(node.sorted)],
+		sorted:    make([]*FileEntry, len(node.sorted)-a),
 		children:  nil,
-	})
-	//fmt.Println("lastchild:", node.threshold, a, len(node.sorted))
+	}
+	copy(lastnode.sorted, node.sorted[a:len(node.sorted)])
+	node.children = append(node.children, lastnode)
 	node.sorted = nil
+}
 
-	// lensum := 0
-	// for _, child := range node.children {
-	// 	lensum += len(child.(*SizeBucket).sorted)
-	// }
-	// fmt.Println("lensum:", lensum)
-	// panic("test")
+func (node *SizeBucket) Walk(direction int, f func(entry *FileEntry) bool) bool {
+	var indexfunc func(int, int) int
+	switch direction {
+	case BUCKET_ASCENDING:
+		indexfunc = func(l, i int) int { return i }
+	case BUCKET_DESCENDING:
+		indexfunc = func(l, j int) int { return l - 1 - j }
+	}
+
+	for i := range node.children {
+		child := node.children[indexfunc(len(node.children), i)]
+		if len(child.(*SizeBucket).children) > 0 {
+			if !child.Walk(direction, f) {
+				return false
+			}
+		} else {
+			sorted := child.(*SizeBucket).sorted
+			for j := range sorted {
+				entry := sorted[indexfunc(len(sorted), j)]
+				if !f(entry) {
+					return false
+				}
+			}
+		}
+	}
+
+	return true
 }
 
 func (node *SizeBucket) Print(level int) {
