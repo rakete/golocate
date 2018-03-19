@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"runtime"
 	"time"
 
 	"github.com/gotk3/gotk3/glib"
@@ -103,7 +104,15 @@ func setupWindow(display ResultChannel, application *gtk.Application, treeview *
 			}
 			finish := make(chan struct{})
 			directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
-			Crawl(mem, display, finish, directories, nil)
+			cores := runtime.NumCPU()
+
+			log.Println("start Crawl on", cores, "cores")
+			Crawl(cores, mem, display, finish, directories, nil)
+			<-finish
+			log.Println("closed finish in Crawl")
+			log.Println("mem.byname", mem.byname.Len())
+			log.Println("mem.bymodtime", mem.bymodtime.Len())
+			log.Println("mem.bysize:", mem.bysize.Len())
 		}()
 	})
 	application.AddAction(aSearch)

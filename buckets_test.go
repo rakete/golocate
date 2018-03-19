@@ -5,31 +5,12 @@ import (
 	"log"
 	"os"
 	//"time"
+	"runtime"
 
 	"testing"
 )
 
 func TestBuckets(t *testing.T) {
-
-	// directories := []string{
-	// 	os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
-	// 	os.Getenv("HOME") + "/go/src/golocate/",
-	// 	os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
-	// 	os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
-	// 	os.Getenv("HOME") + "/.local/share/Trash/files",
-	// 	//os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
-	// }
-
-	// buckets := NewSizeBucket()
-	// for _, dir := range directories {
-	// 	files := getDirectoryFiles([]string{dir})
-	// 	bysize := sortFileEntries(SortedBySize(files))
-
-	// 	buckets.Merge(bysize.(SortedBySize))
-	// }
-
-	// buckets.Print(0)
-
 	display := ResultChannel{
 		make(chan CrawlResult),
 		make(chan CrawlResult),
@@ -50,11 +31,50 @@ func TestBuckets(t *testing.T) {
 			}
 		}
 	}()
-	directories := []string{os.Getenv("HOME")}
-	Crawl(mem, display, finish, directories, nil)
 
-	// bysize := mem.bysize.(*SizeBucket)
-	// bysize.Print(0)
+	//directories := []string{os.Getenv("HOME")}
+	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
+	cores := runtime.NumCPU()
+
+	log.Println("start Crawl on", cores, "cores")
+	Crawl(cores, mem, display, finish, directories, nil)
+	<-finish
+	log.Println("closed finish in Crawl")
+	log.Println("mem.byname", mem.byname.Len())
+	log.Println("mem.bymodtime", mem.bymodtime.Len())
+	log.Println("mem.bysize:", mem.bysize.Len())
+
+	//mem.bysize.(*SizeBucket).Print(0)
+
+	var lastentry *FileEntry
+	mem.bysize.(*SizeBucket).Walk(BUCKET_ASCENDING, func(entry *FileEntry) bool {
+		if lastentry == nil {
+			lastentry = entry
+			return true
+		} else {
+			if lastentry.size > entry.size {
+				t.Error("SizeBucket Walk could not assert ASCENDING sorting")
+				return false
+			}
+			lastentry = entry
+			return true
+		}
+	})
+
+	lastentry = nil
+	mem.bysize.(*SizeBucket).Walk(BUCKET_DESCENDING, func(entry *FileEntry) bool {
+		if lastentry == nil {
+			lastentry = entry
+			return true
+		} else {
+			if lastentry.size < entry.size {
+				t.Error("SizeBucket Walk could not assert DESCENDING sorting")
+				return false
+			}
+			lastentry = entry
+		}
+		return true
+	})
 
 	log.Println("TestBuckets finished")
 }
