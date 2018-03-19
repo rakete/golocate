@@ -92,21 +92,9 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 		}
 
 		if len(files) > 0 {
-			go func() {
-				byname := make([]*FileEntry, len(files))
-				copy(byname, files)
-				collect.byname <- sortFileEntries(SortedByName(byname)).(SortedByName)
-			}()
-			go func() {
-				bymodtime := make([]*FileEntry, len(files))
-				copy(bymodtime, files)
-				collect.bymodtime <- sortFileEntries(SortedByModTime(bymodtime)).(SortedByModTime)
-			}()
-			go func() {
-				bysize := make([]*FileEntry, len(files))
-				copy(bysize, files)
-				collect.bysize <- sortFileEntries(SortedBySize(bysize)).(SortedBySize)
-			}()
+			collect.byname <- files
+			collect.bymodtime <- files
+			collect.bysize <- files
 		} else {
 			defer func() {
 				wg.Done()
@@ -114,7 +102,6 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 				wg.Done()
 			}()
 		}
-
 	}
 
 	defer wg.Done()
@@ -143,8 +130,13 @@ func Crawl(cores int, mem ResultMemory, display ResultChannel, finish chan struc
 	go func() {
 		for {
 			select {
-			case newbyname := <-collect.byname:
+			case files := <-collect.byname:
+				newbyname := make([]*FileEntry, len(files))
+				copy(newbyname, files)
+
+				newbyname = sortFileEntries(SortedByName(newbyname)).(SortedByName)
 				mem.byname.Merge(newbyname)
+
 				display.byname <- mem.byname
 				wg.Done()
 			case <-finish:
@@ -156,8 +148,13 @@ func Crawl(cores int, mem ResultMemory, display ResultChannel, finish chan struc
 	go func() {
 		for {
 			select {
-			case newbymodtime := <-collect.bymodtime:
+			case files := <-collect.bymodtime:
+				newbymodtime := make([]*FileEntry, len(files))
+				copy(newbymodtime, files)
+
+				newbymodtime = sortFileEntries(SortedByModTime(newbymodtime)).(SortedByModTime)
 				mem.bymodtime.Merge(newbymodtime)
+
 				display.bymodtime <- mem.bymodtime
 				wg.Done()
 			case <-finish:
@@ -169,8 +166,13 @@ func Crawl(cores int, mem ResultMemory, display ResultChannel, finish chan struc
 	go func() {
 		for {
 			select {
-			case newbysize := <-collect.bysize:
+			case files := <-collect.bysize:
+				newbysize := make([]*FileEntry, len(files))
+				copy(newbysize, files)
+
+				newbysize = sortFileEntries(SortedBySize(newbysize)).(SortedBySize)
 				mem.bysize.Merge(newbysize)
+
 				display.bysize <- mem.bysize
 				wg.Done()
 			case <-finish:
