@@ -103,13 +103,26 @@ func TestSortMerge(t *testing.T) {
 		files := getDirectoryFiles([]string{dir})
 		allfiles = append(allfiles, files...)
 
-		var temp []*FileEntry
-		copy(files, temp)
-		byname = sortMerge(SORT_BY_NAME, byname, sortFileEntries(SortedByName(temp)).(SortedByName))
-		copy(files, temp)
-		bymodtime = sortMerge(SORT_BY_MODTIME, bymodtime, sortFileEntries(SortedByModTime(temp)).(SortedByModTime))
-		copy(files, temp)
-		bysize = sortMerge(SORT_BY_SIZE, bysize, sortFileEntries(SortedBySize(temp)).(SortedBySize))
+		bynamefiles := make([]*FileEntry, len(files))
+		copy(bynamefiles, files)
+		byname = sortMerge(SORT_BY_NAME, byname, sortFileEntries(SortedByName(bynamefiles)).(SortedByName))
+		if len(byname) < len(allfiles) {
+			t.Error("Result of sortMerge for SORT_BY_NAME contains less entries then its input", len(byname), len(allfiles))
+		}
+
+		bymodtimefiles := make([]*FileEntry, len(files))
+		copy(bymodtimefiles, files)
+		bymodtime = sortMerge(SORT_BY_MODTIME, bymodtime, sortFileEntries(SortedByModTime(bymodtimefiles)).(SortedByModTime))
+		if len(bymodtime) < len(allfiles) {
+			t.Error("Result of sortMerge for SORT_BY_MODTIME contains less entries then its input", len(bymodtime), len(allfiles))
+		}
+
+		bysizefiles := make([]*FileEntry, len(files))
+		copy(bysizefiles, files)
+		bysize = sortMerge(SORT_BY_SIZE, bysize, sortFileEntries(SortedBySize(bysizefiles)).(SortedBySize))
+		if len(bysize) < len(allfiles) {
+			t.Error("Result of sortMerge for SORT_BY_SIZE contains less entries then its input", len(bysize), len(allfiles))
+		}
 	}
 
 	if !sort.IsSorted(SortedByName(byname)) {

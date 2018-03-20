@@ -39,6 +39,7 @@ func TestBuckets(t *testing.T) {
 
 	log.Println("start Crawl on", cores, "cores")
 	Crawl(cores, mem, display, finish, directories, nil)
+
 	<-finish
 	log.Println("closed finish in Crawl")
 	log.Println("mem.byname", mem.byname.NumFiles())
@@ -91,7 +92,6 @@ func TestBuckets(t *testing.T) {
 		for _, entry := range node.sorted {
 			if !SizeThreshold(entry.size).Less(node.threshold) {
 				t.Error("Found an entry.size that is not less then its threshold")
-				log.Println(entry.size, node.threshold)
 				return false
 			}
 		}
