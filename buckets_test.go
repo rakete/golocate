@@ -49,7 +49,7 @@ func TestBuckets(t *testing.T) {
 	//mem.bysize.(*SizeBucket).Print(0)
 
 	var lastentry *FileEntry
-	mem.bysize.(*SizeBucket).WalkEntries(BUCKET_ASCENDING, func(entry *FileEntry) bool {
+	WalkEntries(mem.bysize.(*SizeBucket), BUCKET_ASCENDING, func(entry *FileEntry) bool {
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -64,7 +64,7 @@ func TestBuckets(t *testing.T) {
 	})
 
 	lastentry = nil
-	mem.bysize.(*SizeBucket).WalkEntries(BUCKET_DESCENDING, func(entry *FileEntry) bool {
+	WalkEntries(mem.bysize.(*SizeBucket), BUCKET_DESCENDING, func(entry *FileEntry) bool {
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -78,7 +78,7 @@ func TestBuckets(t *testing.T) {
 		return true
 	})
 
-	mem.bysize.(*SizeBucket).WalkNodes(BUCKET_ASCENDING, func(direction int, node *Node) bool {
+	WalkNodes(mem.bysize.(*SizeBucket), BUCKET_ASCENDING, func(direction int, node *Node) bool {
 		if !sort.IsSorted(SortedBySize(node.sorted)) {
 			t.Error("Found a node.sorted that is not sorted")
 			return false
