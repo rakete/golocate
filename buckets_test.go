@@ -6,6 +6,7 @@ import (
 	"os"
 	//"time"
 	"runtime"
+	"sort"
 
 	"testing"
 )
@@ -40,14 +41,14 @@ func TestBuckets(t *testing.T) {
 	Crawl(cores, mem, display, finish, directories, nil)
 	<-finish
 	log.Println("closed finish in Crawl")
-	log.Println("mem.byname", mem.byname.Len())
-	log.Println("mem.bymodtime", mem.bymodtime.Len())
-	log.Println("mem.bysize:", mem.bysize.Len())
+	log.Println("mem.byname", mem.byname.NumFiles())
+	log.Println("mem.bymodtime", mem.bymodtime.NumFiles())
+	log.Println("mem.bysize:", mem.bysize.NumFiles())
 
 	//mem.bysize.(*SizeBucket).Print(0)
 
 	var lastentry *FileEntry
-	mem.bysize.(*SizeBucket).Walk(BUCKET_ASCENDING, func(entry *FileEntry) bool {
+	mem.bysize.(*SizeBucket).WalkEntries(BUCKET_ASCENDING, func(entry *FileEntry) bool {
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -62,7 +63,7 @@ func TestBuckets(t *testing.T) {
 	})
 
 	lastentry = nil
-	mem.bysize.(*SizeBucket).Walk(BUCKET_DESCENDING, func(entry *FileEntry) bool {
+	mem.bysize.(*SizeBucket).WalkEntries(BUCKET_DESCENDING, func(entry *FileEntry) bool {
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -72,6 +73,27 @@ func TestBuckets(t *testing.T) {
 				return false
 			}
 			lastentry = entry
+		}
+		return true
+	})
+
+	mem.bysize.(*SizeBucket).WalkNodes(BUCKET_ASCENDING, func(direction int, node *Node) bool {
+		if !sort.IsSorted(SortedBySize(node.sorted)) {
+			t.Error("Found a node.sorted that is not sorted")
+			return false
+		}
+
+		if len(node.children) == 1 {
+			t.Error("Found a node with only one children")
+			return false
+		}
+
+		for _, entry := range node.sorted {
+			if !SizeThreshold(entry.size).Less(node.threshold) {
+				t.Error("Found an entry.size that is not less then its threshold")
+				log.Println(entry.size, node.threshold)
+				return false
+			}
 		}
 		return true
 	})
