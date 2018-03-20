@@ -39,22 +39,33 @@ type ResultMemory struct {
 
 type CrawlResult interface {
 	Merge(files []*FileEntry)
-	Len() int
+	NumFiles() int
 }
 
-type FileEntries []*FileEntry
+type NameEntries []*FileEntry
+type TimeEntries []*FileEntry
+type SizeEntries []*FileEntry
 
-func NewFileEntries() *FileEntries {
-	return new(FileEntries)
+func (entries *NameEntries) Merge(files []*FileEntry) {
+	*entries = NameEntries(append(*entries, files...))
+	//*entries = sortMerge(SORT_BY_SIZE, *entries, files)
 }
 
-func (entries *FileEntries) Merge(files []*FileEntry) {
-	*entries = FileEntries(append(*entries, files...))
+func (entries *NameEntries) NumFiles() int { return len(*entries) }
+
+func (entries *TimeEntries) Merge(files []*FileEntry) {
+	*entries = TimeEntries(append(*entries, files...))
+	//*entries = sortMerge(SORT_BY_SIZE, *entries, files)
 }
 
-func (entries *FileEntries) Len() int {
-	return len(*entries)
+func (entries *TimeEntries) NumFiles() int { return len(*entries) }
+
+func (entries *SizeEntries) Merge(files []*FileEntry) {
+	*entries = SizeEntries(append(*entries, files...))
+	//*entries = sortMerge(SORT_BY_SIZE, *entries, files)
 }
+
+func (entries *SizeEntries) NumFiles() int { return len(*entries) }
 
 func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, collect FilesChannel, dir string, query *regexp.Regexp) {
 	entries, err := ioutil.ReadDir(dir)

@@ -98,9 +98,9 @@ func setupWindow(display ResultChannel, application *gtk.Application, treeview *
 		go func() {
 			glib.IdleAdd(liststore.Clear)
 			mem := ResultMemory{
-				NewFileEntries(),
-				NewFileEntries(),
-				NewFileEntries(),
+				new(NameEntries),
+				new(TimeEntries),
+				new(SizeEntries),
 			}
 			finish := make(chan struct{})
 			directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
@@ -110,9 +110,9 @@ func setupWindow(display ResultChannel, application *gtk.Application, treeview *
 			Crawl(cores, mem, display, finish, directories, nil)
 			<-finish
 			log.Println("closed finish in Crawl")
-			log.Println("mem.byname", mem.byname.Len())
-			log.Println("mem.bymodtime", mem.bymodtime.Len())
-			log.Println("mem.bysize:", mem.bysize.Len())
+			log.Println("mem.byname", mem.byname.NumFiles())
+			log.Println("mem.bymodtime", mem.bymodtime.NumFiles())
+			log.Println("mem.bysize:", mem.bysize.NumFiles())
 		}()
 	})
 	application.AddAction(aSearch)
@@ -195,7 +195,7 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry FileEntry) 
 }
 
 func updateView(liststore *gtk.ListStore, display ResultChannel, sorttype chan int) {
-	var byname, bymodtime, bysize FileEntries
+	var byname, bymodtime, bysize []*FileEntry
 	_, _, _ = byname, bymodtime, bysize
 	currentsort := -1
 
@@ -233,11 +233,11 @@ func updateView(liststore *gtk.ListStore, display ResultChannel, sorttype chan i
 		select {
 		case currentsort = <-sorttype:
 		case files := <-display.byname:
-			byname = *files.(*FileEntries)
+			byname = *files.(*NameEntries)
 		case files := <-display.bymodtime:
-			bymodtime = *files.(*FileEntries)
+			bymodtime = *files.(*TimeEntries)
 		case files := <-display.bysize:
-			bysize = *files.(*FileEntries)
+			bysize = *files.(*SizeEntries)
 		}
 	}
 }
