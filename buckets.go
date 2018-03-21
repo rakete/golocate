@@ -303,6 +303,14 @@ func Split(bucket Bucket, numparts int) {
 			b += inc
 		}
 
+		// - the += inc above may increase b beyond len(node.sorted), this will cause an error
+		// when we finally use b in node.sorted[a:b], if we had to increase b so much that it goes
+		// beyond len(node.sorted), then we just set it to len(node.sorted) here manually so the
+		// Branch call below does not panic
+		if b >= len(node.sorted) {
+			b = len(node.sorted)
+		}
+
 		// - the above edge case when the sorted slice contains almost only entries with the same
 		// size can be handled differently then just returning early and not splitting, this if
 		// sets b to the smallest possible value if we are not at the end of numparts yet but the
