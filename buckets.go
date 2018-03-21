@@ -107,10 +107,6 @@ func (node *SizeBucket) Test(entry *FileEntry) bool {
 	return (node.threshold == nil || SizeThreshold(entry.size).Less(node.threshold))
 }
 
-func (node *SizeBucket) Append(entry *FileEntry) {
-	node.queue = append(node.queue, entry)
-}
-
 func (node *SizeBucket) Sort() {
 	node.queue = sortFileEntries(SortedBySize(node.queue)).(SortedBySize)
 	node.sorted = sortMerge(SORT_BY_SIZE, node.sorted, node.queue)
@@ -186,7 +182,7 @@ func WalkNodes(bucket Bucket, direction int, f func(direction int, node *Node) b
 
 	for i := range node.children {
 		child := node.children[indexfunc(len(node.children), i)]
-		if len(child.(*SizeBucket).children) > 0 {
+		if len(child.Node().children) > 0 {
 			if !WalkNodes(child, direction, f) {
 				return false
 			}
@@ -224,16 +220,17 @@ func Insert(bucket Bucket, first int, files []*FileEntry) int {
 
 	i := first
 	for _, child := range node.children {
+		childnode := child.Node()
 		for i < len(files) && child.Test(files[i]) {
-			if len(child.Node().children) > 0 {
+			if len(childnode.children) > 0 {
 				i = Insert(child, i, files)
 			} else {
-				child.Append(files[i])
+				childnode.queue = append(childnode.queue, files[i])
 				i += 1
 			}
 		}
 
-		if len(child.Node().queue) >= 10000 {
+		if len(childnode.queue) >= 10000 {
 			Split(child, 10)
 		}
 
