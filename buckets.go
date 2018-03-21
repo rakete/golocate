@@ -39,7 +39,6 @@ const (
 
 type Bucket interface {
 	Test(entry *FileEntry) bool
-	Append(entry *FileEntry)
 	Sort()
 	Branch(threshold Threshold, entries []*FileEntry)
 	Threshold(i int) Threshold
