@@ -3,26 +3,52 @@ package main
 import (
 	"fmt"
 	//"sort"
+	"time"
 )
 
 type Threshold interface {
 	Less(than Threshold) bool
+	String() string
 }
 
 type NameThreshold string
-type TimeThreshold int64
+type TimeThreshold time.Time
 type SizeThreshold int64
 
 func (a NameThreshold) Less(b Threshold) bool {
 	return a < b.(NameThreshold)
 }
 
+func (a NameThreshold) String() string {
+	return string(a)
+}
+
 func (a TimeThreshold) Less(b Threshold) bool {
-	return a < b.(TimeThreshold)
+	return time.Time(a).After(time.Time(b.(TimeThreshold)))
+}
+
+func (a TimeThreshold) String() string {
+	return time.Time(a).Format("2006-01-02 15:04:05")
 }
 
 func (a SizeThreshold) Less(b Threshold) bool {
 	return a < b.(SizeThreshold)
+}
+
+func (a SizeThreshold) String() string {
+	if a >= (1000 * 1000 * 1000 * 1000 * 1000) {
+		return fmt.Sprintf("%.3fPb", float64(a)/(1000*1000*1000*1000*1000))
+	} else if a >= (1000 * 1000 * 1000 * 1000) {
+		return fmt.Sprintf("%.3fTb", float64(a)/(1000*1000*1000*1000))
+	} else if a >= (1000 * 1000 * 1000) {
+		return fmt.Sprintf("%.3fGb", float64(a)/(1000*1000*1000))
+	} else if a >= (1000 * 1000) {
+		return fmt.Sprintf("%.3fMb", float64(a)/(1000*1000))
+	} else if a >= 1000 {
+		return fmt.Sprintf("%.3fKb", float64(a)/1000)
+	} else {
+		return fmt.Sprintf("%db", a)
+	}
 }
 
 type Node struct {
@@ -46,7 +72,7 @@ type Bucket interface {
 }
 
 type NameBucket Node
-type TimeBucket Node
+type ModTimeBucket Node
 type SizeBucket Node
 
 func NewNameBucket() *NameBucket {
@@ -58,14 +84,99 @@ func NewNameBucket() *NameBucket {
 func (node *NameBucket) Merge(files []*FileEntry) {}
 func (node *NameBucket) NumFiles() int            { return 0 }
 
-func NewTimeBucket() *TimeBucket {
-	bucket := new(TimeBucket)
+func NewModTimeBucket() *ModTimeBucket {
+	bucket := new(ModTimeBucket)
+
+	now := time.Now()
+	second := time.Second
+	minute := time.Minute
+	hour := time.Hour
+	day := time.Hour * 24
+	week := day * 7
+	year := week * 52
+	decade := year * 10
+
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now)})
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-second * 10))})
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-minute))})
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-minute * 10))})
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-minute * 20))})
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-minute * 30))})
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-minute * 40))})
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-minute * 50))})
+
+	for i := 1; i < 24; i++ {
+		bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-hour * time.Duration(i)))})
+	}
+
+	for i := 1; i < 7; i++ {
+		bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-day * time.Duration(i)))})
+	}
+
+	for i := 1; i < 52; i++ {
+		bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-week * time.Duration(i)))})
+	}
+
+	for i := 1; i < 10; i++ {
+		bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-year * time.Duration(i)))})
+	}
+
+	bucket.children = append(bucket.children, &ModTimeBucket{threshold: TimeThreshold(now.Add(-decade))})
+	bucket.children = append(bucket.children, &ModTimeBucket{})
 
 	return bucket
 }
 
-func (node *TimeBucket) Merge(files []*FileEntry) {}
-func (node *TimeBucket) NumFiles() int            { return 0 }
+func (node *ModTimeBucket) Merge(files []*FileEntry) {
+	Insert(node, 0, files)
+}
+
+func (node *ModTimeBucket) NumFiles() int {
+	num := 0
+	for _, child := range node.children {
+		num += child.(*ModTimeBucket).NumFiles()
+	}
+	num += len(node.queue)
+	num += len(node.sorted)
+	return num
+}
+
+func (node *ModTimeBucket) Test(entry *FileEntry) bool {
+	return (node.threshold == nil || TimeThreshold(entry.modtime).Less(node.threshold))
+}
+
+func (node *ModTimeBucket) Sort() {
+	if len(node.queue) > 0 {
+		node.queue = sortFileEntries(SortedByModTime(node.queue)).(SortedByModTime)
+		node.sorted = sortMerge(SORT_BY_MODTIME, node.sorted, node.queue)
+		node.queue = nil
+	}
+
+	for _, child := range node.children {
+		child.Sort()
+	}
+}
+
+func (node *ModTimeBucket) Branch(threshold Threshold, entries []*FileEntry) {
+	newnode := &ModTimeBucket{
+		threshold: threshold,
+		sorted:    make([]*FileEntry, len(entries)),
+	}
+	copy(newnode.sorted, entries)
+	node.children = append(node.children, newnode)
+}
+
+func (node *ModTimeBucket) Threshold(i int) Threshold {
+	if i >= len(node.sorted) {
+		return node.threshold
+	} else {
+		return TimeThreshold(node.sorted[i].modtime)
+	}
+}
+
+func (node *ModTimeBucket) Node() *Node {
+	return (*Node)(node)
+}
 
 func NewSizeBucket() *SizeBucket {
 	bucket := new(SizeBucket)
@@ -197,6 +308,7 @@ func WalkNodes(bucket Bucket, direction int, f func(direction int, node *Node) b
 
 func Print(bucket Bucket, level int) {
 	node := bucket.Node()
+
 	for _, child := range node.children {
 		childnode := child.Node()
 		for i := 0; i < level; i++ {
@@ -210,7 +322,7 @@ func Print(bucket Bucket, level int) {
 			if childnode.threshold == nil {
 				fmt.Println("maximum", "numfiles:", len(childnode.queue)+len(childnode.sorted))
 			} else {
-				fmt.Println(childnode.threshold, "numfiles:", len(childnode.queue)+len(childnode.sorted))
+				fmt.Println(childnode.threshold.String(), "numfiles:", len(childnode.queue)+len(childnode.sorted))
 			}
 		}
 	}

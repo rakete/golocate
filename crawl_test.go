@@ -1,7 +1,8 @@
 package main
 
 import (
-	//"os"
+	"os"
+	"path"
 	//"log"
 	"runtime"
 
@@ -30,7 +31,7 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 			}
 		}
 	}()
-	directories := []string{"/tmp"}
+	directories := []string{path.Join(os.Getenv("HOME"), "/go/src/golocate")}
 
 	cores := runtime.NumCPU()
 	b.StartTimer()
@@ -51,7 +52,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 	}
 	mem := ResultMemory{
 		NewNameBucket(),
-		NewTimeBucket(),
+		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
 	go func() {
@@ -63,7 +64,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 			}
 		}
 	}()
-	directories := []string{"/tmp"}
+	directories := []string{path.Join(os.Getenv("HOME"), "/go/src/golocate")}
 
 	cores := runtime.NumCPU()
 	b.StartTimer()

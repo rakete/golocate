@@ -23,7 +23,7 @@ type SortedByModTime []*FileEntry
 func (a SortedByModTime) Len() int      { return len(a) }
 func (a SortedByModTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a SortedByModTime) Less(i, j int) bool {
-	return a[i].modtime < a[j].modtime
+	return a[i].modtime.After(a[j].modtime)
 }
 
 type SortedBySize []*FileEntry

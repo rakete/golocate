@@ -8,6 +8,7 @@ import (
 	//"strconv"
 	"io/ioutil"
 	"sync"
+	"time"
 	//"gotk3/gtk"
 	//"fmt"
 )
@@ -15,7 +16,7 @@ import (
 type FileEntry struct {
 	path    string
 	name    string
-	modtime int64
+	modtime time.Time
 	size    int64
 }
 
@@ -95,7 +96,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 				entry := &FileEntry{
 					path:    dir,
 					name:    fileinfo.Name(),
-					modtime: fileinfo.ModTime().Unix(),
+					modtime: fileinfo.ModTime(),
 					size:    fileinfo.Size(),
 				}
 				files = append(files, entry)

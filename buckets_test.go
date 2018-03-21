@@ -19,7 +19,7 @@ func TestBuckets(t *testing.T) {
 	}
 	mem := ResultMemory{
 		NewNameBucket(),
-		NewTimeBucket(),
+		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
 	finish := make(chan struct{})
@@ -46,7 +46,8 @@ func TestBuckets(t *testing.T) {
 	log.Println("mem.bymodtime", mem.bymodtime.NumFiles())
 	log.Println("mem.bysize:", mem.bysize.NumFiles())
 
-	//mem.bysize.(*SizeBucket).Print(0)
+	//Print(mem.bymodtime.(*ModTimeBucket), 0)
+	Print(mem.bysize.(*SizeBucket), 0)
 
 	var lastentry *FileEntry
 	WalkEntries(mem.bysize.(*SizeBucket), BUCKET_ASCENDING, func(entry *FileEntry) bool {
@@ -112,6 +113,10 @@ func TestLess(t *testing.T) {
 
 	if "1.h" < "1" {
 		log.Println("1.h < 1")
+	}
+
+	if "b" < "aaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		log.Println("b < aaaaaaaaaaaaaaaaaaaaaaaaa")
 	}
 
 	log.Println("TestLess finished")
