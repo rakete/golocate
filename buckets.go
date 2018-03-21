@@ -108,9 +108,11 @@ func (node *SizeBucket) Test(entry *FileEntry) bool {
 }
 
 func (node *SizeBucket) Sort() {
-	node.queue = sortFileEntries(SortedBySize(node.queue)).(SortedBySize)
-	node.sorted = sortMerge(SORT_BY_SIZE, node.sorted, node.queue)
-	node.queue = nil
+	if len(node.queue) > 0 {
+		node.queue = sortFileEntries(SortedBySize(node.queue)).(SortedBySize)
+		node.sorted = sortMerge(SORT_BY_SIZE, node.sorted, node.queue)
+		node.queue = nil
+	}
 
 	for _, child := range node.children {
 		child.Sort()
