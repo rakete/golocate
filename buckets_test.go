@@ -46,8 +46,9 @@ func TestBuckets(t *testing.T) {
 	log.Println("mem.bymodtime", mem.bymodtime.NumFiles())
 	log.Println("mem.bysize:", mem.bysize.NumFiles())
 
+	//Print(mem.byname.(*NameBucket), 0)
 	//Print(mem.bymodtime.(*ModTimeBucket), 0)
-	Print(mem.bysize.(*SizeBucket), 0)
+	//Print(mem.bysize.(*SizeBucket), 0)
 
 	var lastentry *FileEntry
 	WalkEntries(mem.bysize.(*SizeBucket), BUCKET_ASCENDING, func(entry *FileEntry) bool {
@@ -117,6 +118,14 @@ func TestLess(t *testing.T) {
 
 	if "b" < "aaaaaaaaaaaaaaaaaaaaaaaaaa" {
 		log.Println("b < aaaaaaaaaaaaaaaaaaaaaaaaa")
+	}
+
+	if "a" < "0" {
+		log.Println("a < 0")
+	}
+
+	if "a" < "A" {
+		log.Println("a < A")
 	}
 
 	log.Println("TestLess finished")

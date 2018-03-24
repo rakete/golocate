@@ -16,7 +16,11 @@ type TimeThreshold time.Time
 type SizeThreshold int64
 
 func (a NameThreshold) Less(b Threshold) bool {
-	return a < b.(NameThreshold)
+	if a[0] == '.' {
+		return a[1:] < b.(NameThreshold)
+	} else {
+		return a < b.(NameThreshold)
+	}
 }
 
 func (a NameThreshold) String() string {
@@ -64,7 +68,7 @@ const (
 )
 
 type Bucket interface {
-	Test(entry *FileEntry) bool
+	Less(entry *FileEntry) bool
 	Sort()
 	Branch(threshold Threshold, entries []*FileEntry)
 	Threshold(i int) Threshold
@@ -78,11 +82,64 @@ type SizeBucket Node
 func NewNameBucket() *NameBucket {
 	bucket := new(NameBucket)
 
+	for _, char := range "9abcdefghijklmnopqrstuvwxyz" {
+		bucket.children = append(bucket.children, &NameBucket{threshold: NameThreshold(char)})
+	}
+	bucket.children = append(bucket.children, &NameBucket{})
+
 	return bucket
 }
 
-func (node *NameBucket) Merge(files []*FileEntry) {}
-func (node *NameBucket) NumFiles() int            { return 0 }
+func (node *NameBucket) Merge(files []*FileEntry) {
+	Insert(node, 0, files)
+}
+
+func (node *NameBucket) NumFiles() int {
+	num := 0
+	for _, child := range node.children {
+		num += child.(*NameBucket).NumFiles()
+	}
+	num += len(node.queue)
+	num += len(node.sorted)
+	return num
+}
+
+func (node *NameBucket) Less(entry *FileEntry) bool {
+	return (node.threshold == nil || NameThreshold(entry.name).Less(node.threshold))
+}
+
+func (node *NameBucket) Sort() {
+	if len(node.queue) > 0 {
+		node.queue = sortFileEntries(SortedByName(node.queue)).(SortedByName)
+		node.sorted = sortMerge(SORT_BY_NAME, node.sorted, node.queue)
+		node.queue = nil
+	}
+
+	for _, child := range node.children {
+		child.Sort()
+	}
+}
+
+func (node *NameBucket) Branch(threshold Threshold, entries []*FileEntry) {
+	newnode := &NameBucket{
+		threshold: threshold,
+		sorted:    make([]*FileEntry, len(entries)),
+	}
+	copy(newnode.sorted, entries)
+	node.children = append(node.children, newnode)
+}
+
+func (node *NameBucket) Threshold(i int) Threshold {
+	if i >= len(node.sorted) {
+		return node.threshold
+	} else {
+		return NameThreshold(node.sorted[i].name)
+	}
+}
+
+func (node *NameBucket) Node() *Node {
+	return (*Node)(node)
+}
 
 func NewModTimeBucket() *ModTimeBucket {
 	bucket := new(ModTimeBucket)
@@ -141,7 +198,7 @@ func (node *ModTimeBucket) NumFiles() int {
 	return num
 }
 
-func (node *ModTimeBucket) Test(entry *FileEntry) bool {
+func (node *ModTimeBucket) Less(entry *FileEntry) bool {
 	return (node.threshold == nil || TimeThreshold(entry.modtime).Less(node.threshold))
 }
 
@@ -213,7 +270,7 @@ func (node *SizeBucket) NumFiles() int {
 	return num
 }
 
-func (node *SizeBucket) Test(entry *FileEntry) bool {
+func (node *SizeBucket) Less(entry *FileEntry) bool {
 	return (node.threshold == nil || SizeThreshold(entry.size).Less(node.threshold))
 }
 
@@ -334,7 +391,7 @@ func Insert(bucket Bucket, first int, files []*FileEntry) int {
 	i := first
 	for _, child := range node.children {
 		childnode := child.Node()
-		for i < len(files) && child.Test(files[i]) {
+		for i < len(files) && child.Less(files[i]) {
 			if len(childnode.children) > 0 {
 				i = Insert(child, i, files)
 			} else {
