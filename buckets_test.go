@@ -7,12 +7,15 @@ import (
 	//"time"
 	"runtime"
 	"sort"
+	"sync"
 
 	"testing"
 )
 
 func TestBuckets(t *testing.T) {
-	display := ResultChannel{
+	display := DisplayChannel{
+		make(chan int),
+		make(chan int),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
@@ -35,13 +38,19 @@ func TestBuckets(t *testing.T) {
 
 	//directories := []string{os.Getenv("HOME")}
 	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
+	newdirs := make(chan string)
 	cores := runtime.NumCPU()
 
-	log.Println("start Crawl on", cores, "cores")
-	Crawl(cores, mem, display, finish, directories, nil)
+	var wg sync.WaitGroup
+	log.Println("starting Crawl on", cores, "cores")
+	go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+	for _, dir := range directories {
+		newdirs <- dir
+	}
+	wg.Wait()
+	close(finish)
+	log.Println("Crawl terminated")
 
-	<-finish
-	log.Println("closed finish in Crawl")
 	log.Println("mem.byname", mem.byname.NumFiles())
 	log.Println("mem.bymodtime", mem.bymodtime.NumFiles())
 	log.Println("mem.bysize:", mem.bysize.NumFiles())

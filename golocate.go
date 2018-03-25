@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/gotk3/gotk3/glib"
@@ -69,7 +70,7 @@ func setupSearchBar() *gtk.SearchBar {
 	return searchbar
 }
 
-func setupWindow(display ResultChannel, application *gtk.Application, treeview *gtk.TreeView, liststore *gtk.ListStore, searchbar *gtk.SearchBar, title string) {
+func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar *gtk.SearchBar, title string) {
 	win, err := gtk.ApplicationWindowNew(application)
 	if err != nil {
 		log.Fatal("Unable to create window:", err)
@@ -93,45 +94,10 @@ func setupWindow(display ResultChannel, application *gtk.Application, treeview *
 		log.Fatal("Could not create menu (nil)")
 	}
 	menu.Append("Search", "app.search")
-	aSearch := glib.SimpleActionNew("search", nil)
-	aSearch.Connect("activate", func() {
-		go func() {
-			glib.IdleAdd(liststore.Clear)
-			mem := ResultMemory{
-				new(NameEntries),
-				new(TimeEntries),
-				new(SizeEntries),
-			}
-			finish := make(chan struct{})
-			directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
-			cores := runtime.NumCPU()
-
-			log.Println("start Crawl on", cores, "cores")
-			Crawl(cores, mem, display, finish, directories, nil)
-			<-finish
-			log.Println("closed finish in Crawl")
-			log.Println("mem.byname", mem.byname.NumFiles())
-			log.Println("mem.bymodtime", mem.bymodtime.NumFiles())
-			log.Println("mem.bysize:", mem.bysize.NumFiles())
-		}()
-	})
-	application.AddAction(aSearch)
 
 	menu.Append("Clear", "app.clear")
-	aClear := glib.SimpleActionNew("clear", nil)
-	aClear.Connect("activate", func() {
-		go func() {
-			glib.IdleAdd(liststore.Clear)
-		}()
-	})
-	application.AddAction(aClear)
 
 	menu.Append("Quit", "app.quit")
-	aQuit := glib.SimpleActionNew("quit", nil)
-	aQuit.Connect("activate", func() {
-		application.Quit()
-	})
-	application.AddAction(aQuit)
 
 	mbtn.SetMenuModel(&menu.MenuModel)
 	header.PackStart(mbtn)
@@ -194,8 +160,8 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry FileEntry) 
 	}
 }
 
-func updateView(liststore *gtk.ListStore, display ResultChannel, sorttype chan int) {
-	var byname, bymodtime, bysize []*FileEntry
+func updateView(liststore *gtk.ListStore, display DisplayChannel, sorttype chan int) {
+	var byname, bymodtime, bysize Bucket
 	_, _, _ = byname, bymodtime, bysize
 	currentsort := -1
 
@@ -233,11 +199,11 @@ func updateView(liststore *gtk.ListStore, display ResultChannel, sorttype chan i
 		select {
 		case currentsort = <-sorttype:
 		case files := <-display.byname:
-			byname = *files.(*NameEntries)
+			byname = files.(*NameBucket)
 		case files := <-display.bymodtime:
-			bymodtime = *files.(*TimeEntries)
+			bymodtime = files.(*ModTimeBucket)
 		case files := <-display.bysize:
-			bysize = *files.(*SizeEntries)
+			bysize = files.(*SizeBucket)
 		}
 	}
 }
@@ -249,20 +215,66 @@ func main() {
 		log.Fatal("Could not create application:", err)
 	}
 
-	display := ResultChannel{make(chan CrawlResult), make(chan CrawlResult), make(chan CrawlResult)}
+	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
+
+	mem := ResultMemory{
+		new(NameBucket),
+		new(ModTimeBucket),
+		new(SizeBucket),
+	}
+	display := DisplayChannel{make(chan int), make(chan int), make(chan CrawlResult), make(chan CrawlResult), make(chan CrawlResult)}
+	newdirs := make(chan string)
+	finish := make(chan struct{})
+	cores := runtime.NumCPU()
 
 	var liststore *gtk.ListStore
 	var treeview *gtk.TreeView
 	var searchbar *gtk.SearchBar
 	sorttype := make(chan int)
+
+	var wg sync.WaitGroup
 	application.Connect("activate", func() {
 		treeview, liststore = setupTreeView()
 		searchbar = setupSearchBar()
 
-		setupWindow(display, application, treeview, liststore, searchbar, "golocate")
-
 		go updateView(liststore, display, sorttype)
 		sorttype <- SORT_BY_SIZE
+
+		go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+		log.Println("starting Crawl on", cores, "cores")
+		for _, dir := range directories {
+			newdirs <- dir
+		}
+
+		setupWindow(application, treeview, searchbar, "golocate")
+
+		aSearch := glib.SimpleActionNew("search", nil)
+		aSearch.Connect("activate", func() {
+			go func() {
+				glib.IdleAdd(liststore.Clear)
+				for _, dir := range directories {
+					newdirs <- dir
+				}
+			}()
+		})
+		application.AddAction(aSearch)
+
+		aClear := glib.SimpleActionNew("clear", nil)
+		aClear.Connect("activate", func() {
+			go func() {
+				glib.IdleAdd(liststore.Clear)
+			}()
+		})
+		application.AddAction(aClear)
+
+		aQuit := glib.SimpleActionNew("quit", nil)
+		aQuit.Connect("activate", func() {
+			close(finish)
+			<-finish
+			log.Println("Crawl terminated")
+			application.Quit()
+		})
+		application.AddAction(aQuit)
 	})
 
 	os.Exit(application.Run(os.Args))

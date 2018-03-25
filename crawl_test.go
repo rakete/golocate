@@ -5,6 +5,7 @@ import (
 	"path"
 	//"log"
 	"runtime"
+	"sync"
 
 	"testing"
 )
@@ -12,14 +13,16 @@ import (
 func BenchmarkCrawlLargeSlice(b *testing.B) {
 	b.StopTimer()
 
-	display := ResultChannel{
+	display := DisplayChannel{
+		make(chan int),
+		make(chan int),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
 	}
 	mem := ResultMemory{
 		new(NameEntries),
-		new(TimeEntries),
+		new(ModTimeEntries),
 		new(SizeEntries),
 	}
 	go func() {
@@ -32,20 +35,28 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		}
 	}()
 	directories := []string{path.Join(os.Getenv("HOME"), "/go/src/golocate")}
+	newdirs := make(chan string)
 
 	cores := runtime.NumCPU()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
-		Crawl(cores, mem, display, finish, directories, nil)
-		<-finish
+		var wg sync.WaitGroup
+		go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+		for _, dir := range directories {
+			newdirs <- dir
+		}
+		wg.Wait()
+		close(finish)
 	}
 }
 
 func BenchmarkCrawlBuckets(b *testing.B) {
 	b.StopTimer()
 
-	display := ResultChannel{
+	display := DisplayChannel{
+		make(chan int),
+		make(chan int),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
@@ -65,12 +76,18 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		}
 	}()
 	directories := []string{path.Join(os.Getenv("HOME"), "/go/src/golocate")}
+	newdirs := make(chan string)
 
 	cores := runtime.NumCPU()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
-		Crawl(cores, mem, display, finish, directories, nil)
-		<-finish
+		var wg sync.WaitGroup
+		go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+		for _, dir := range directories {
+			newdirs <- dir
+		}
+		wg.Wait()
+		close(finish)
 	}
 }

@@ -26,7 +26,9 @@ type FilesChannel struct {
 	bysize    chan SortedBySize
 }
 
-type ResultChannel struct {
+type DisplayChannel struct {
+	size      chan int
+	direction chan int
 	byname    chan CrawlResult
 	bymodtime chan CrawlResult
 	bysize    chan CrawlResult
@@ -49,7 +51,7 @@ type CrawlResult interface {
 }
 
 type NameEntries []*FileEntry
-type TimeEntries []*FileEntry
+type ModTimeEntries []*FileEntry
 type SizeEntries []*FileEntry
 
 func (entries *NameEntries) Merge(files []*FileEntry) {
@@ -59,12 +61,12 @@ func (entries *NameEntries) Merge(files []*FileEntry) {
 
 func (entries *NameEntries) NumFiles() int { return len(*entries) }
 
-func (entries *TimeEntries) Merge(files []*FileEntry) {
-	*entries = TimeEntries(append(*entries, files...))
+func (entries *ModTimeEntries) Merge(files []*FileEntry) {
+	*entries = ModTimeEntries(append(*entries, files...))
 	//*entries = sortMerge(SORT_BY_SIZE, *entries, files)
 }
 
-func (entries *TimeEntries) NumFiles() int { return len(*entries) }
+func (entries *ModTimeEntries) NumFiles() int { return len(*entries) }
 
 func (entries *SizeEntries) Merge(files []*FileEntry) {
 	*entries = SizeEntries(append(*entries, files...))
@@ -86,7 +88,6 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 		for _, entry := range entries {
 			entrypath := path.Join(dir, entry.Name())
 			if entry.IsDir() {
-				wg.Add(1)
 				newdirs <- entrypath
 			} else if query == nil || query.MatchString(entrypath) {
 				matches = append(matches, entrypath)
@@ -124,19 +125,18 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	defer wg.Done()
 }
 
-func Crawl(cores int, mem ResultMemory, display ResultChannel, finish chan struct{}, directories []string, query *regexp.Regexp) {
+func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChannel, newdirs chan string, finish chan struct{}, query *regexp.Regexp) {
+	wg.Add(1)
 
-	var wg sync.WaitGroup
-
-	newdirs := make(chan string)
 	collect := FilesChannel{make(chan SortedByName), make(chan SortedByModTime), make(chan SortedBySize)}
-	maxproc := make(chan struct{}, cores*2)
+	maxproc := make(chan struct{}, cores)
 	go func() {
 		for {
 			select {
 			case dir := <-newdirs:
+				wg.Add(1)
 				maxproc <- struct{}{}
-				go visit(&wg, maxproc, newdirs, collect, dir, query)
+				go visit(wg, maxproc, newdirs, collect, dir, query)
 			case <-finish:
 				return
 			}
@@ -198,12 +198,6 @@ func Crawl(cores int, mem ResultMemory, display ResultChannel, finish chan struc
 		}
 	}()
 
-	for _, dir := range directories {
-		wg.Add(1)
-		newdirs <- dir
-	}
-
-	wg.Wait()
-	close(finish)
-
+	wg.Done()
+	<-finish
 }
