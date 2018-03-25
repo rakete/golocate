@@ -85,8 +85,27 @@ func NewNameBucket() *NameBucket {
 	return bucket
 }
 
-func (node *NameBucket) Merge(files []*FileEntry) {
-	Insert(node, 0, files)
+func (bucket *NameBucket) Merge(files []*FileEntry) {
+	Insert(bucket, 0, files)
+}
+
+func (bucket *NameBucket) Take(direction, n int) []*FileEntry {
+	var result []*FileEntry
+	WalkNodes(bucket, direction, func(child Bucket) bool {
+		child.Sort()
+		result = append(result, child.Node().sorted...)
+
+		if len(result) >= n {
+			return false
+		} else {
+			return true
+		}
+	})
+
+	if n > len(result) {
+		n = len(result)
+	}
+	return result[:n]
 }
 
 func (node *NameBucket) NumFiles() int {
@@ -179,8 +198,27 @@ func NewModTimeBucket() *ModTimeBucket {
 	return bucket
 }
 
-func (node *ModTimeBucket) Merge(files []*FileEntry) {
-	Insert(node, 0, files)
+func (bucket *ModTimeBucket) Merge(files []*FileEntry) {
+	Insert(bucket, 0, files)
+}
+
+func (bucket *ModTimeBucket) Take(direction, n int) []*FileEntry {
+	var result []*FileEntry
+	WalkNodes(bucket, direction, func(child Bucket) bool {
+		child.Sort()
+		result = append(result, child.Node().sorted...)
+
+		if len(result) >= n {
+			return false
+		} else {
+			return true
+		}
+	})
+
+	if n > len(result) {
+		n = len(result)
+	}
+	return result[:n]
 }
 
 func (node *ModTimeBucket) NumFiles() int {
@@ -251,8 +289,27 @@ func NewSizeBucket() *SizeBucket {
 	return bucket
 }
 
-func (node *SizeBucket) Merge(files []*FileEntry) {
-	Insert(node, 0, files)
+func (bucket *SizeBucket) Merge(files []*FileEntry) {
+	Insert(bucket, 0, files)
+}
+
+func (bucket *SizeBucket) Take(direction, n int) []*FileEntry {
+	var result []*FileEntry
+	WalkNodes(bucket, direction, func(child Bucket) bool {
+		child.Sort()
+		result = append(result, child.Node().sorted...)
+
+		if len(result) >= n {
+			return false
+		} else {
+			return true
+		}
+	})
+
+	if n > len(result) {
+		n = len(result)
+	}
+	return result[:n]
 }
 
 func (node *SizeBucket) NumFiles() int {
@@ -333,7 +390,7 @@ func WalkEntries(bucket Bucket, direction int, f func(entry *FileEntry) bool) bo
 	return true
 }
 
-func WalkNodes(bucket Bucket, direction int, f func(direction int, node *Node) bool) bool {
+func WalkNodes(bucket Bucket, direction int, f func(bucket Bucket) bool) bool {
 	node := bucket.Node()
 
 	var indexfunc func(int, int) int

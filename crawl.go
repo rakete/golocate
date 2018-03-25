@@ -47,6 +47,7 @@ const (
 
 type CrawlResult interface {
 	Merge(files []*FileEntry)
+	Take(direction, n int) []*FileEntry
 	NumFiles() int
 }
 
@@ -56,21 +57,42 @@ type SizeEntries []*FileEntry
 
 func (entries *NameEntries) Merge(files []*FileEntry) {
 	*entries = NameEntries(append(*entries, files...))
-	//*entries = sortMerge(SORT_BY_SIZE, *entries, files)
+}
+
+func (entries *NameEntries) Take(direction, n int) []*FileEntry {
+	sorted := sortFileEntries(SortedByName(*entries)).(SortedByName)
+	if n > len(sorted) {
+		n = len(sorted)
+	}
+	return sorted[:n]
 }
 
 func (entries *NameEntries) NumFiles() int { return len(*entries) }
 
 func (entries *ModTimeEntries) Merge(files []*FileEntry) {
 	*entries = ModTimeEntries(append(*entries, files...))
-	//*entries = sortMerge(SORT_BY_SIZE, *entries, files)
+}
+
+func (entries *ModTimeEntries) Take(direction, n int) []*FileEntry {
+	sorted := sortFileEntries(SortedByModTime(*entries)).(SortedByModTime)
+	if n > len(sorted) {
+		n = len(sorted)
+	}
+	return sorted[:n]
 }
 
 func (entries *ModTimeEntries) NumFiles() int { return len(*entries) }
 
 func (entries *SizeEntries) Merge(files []*FileEntry) {
 	*entries = SizeEntries(append(*entries, files...))
-	//*entries = sortMerge(SORT_BY_SIZE, *entries, files)
+}
+
+func (entries *SizeEntries) Take(direction, n int) []*FileEntry {
+	sorted := sortFileEntries(SortedBySize(*entries)).(SortedBySize)
+	if n > len(sorted) {
+		n = len(sorted)
+	}
+	return sorted[:n]
 }
 
 func (entries *SizeEntries) NumFiles() int { return len(*entries) }
