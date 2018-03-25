@@ -38,6 +38,11 @@ type ResultMemory struct {
 	bysize    CrawlResult
 }
 
+const (
+	DIRECTION_ASCENDING = iota
+	DIRECTION_DESCENDING
+)
+
 type CrawlResult interface {
 	Merge(files []*FileEntry)
 	NumFiles() int

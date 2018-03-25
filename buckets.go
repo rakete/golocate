@@ -62,11 +62,6 @@ type Node struct {
 	children  []Bucket
 }
 
-const (
-	BUCKET_ASCENDING = iota
-	BUCKET_DESCENDING
-)
-
 type Bucket interface {
 	Less(entry *FileEntry) bool
 	Sort()
@@ -312,9 +307,9 @@ func WalkEntries(bucket Bucket, direction int, f func(entry *FileEntry) bool) bo
 
 	var indexfunc func(int, int) int
 	switch direction {
-	case BUCKET_ASCENDING:
+	case DIRECTION_ASCENDING:
 		indexfunc = func(l, i int) int { return i }
-	case BUCKET_DESCENDING:
+	case DIRECTION_DESCENDING:
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
@@ -343,9 +338,9 @@ func WalkNodes(bucket Bucket, direction int, f func(direction int, node *Node) b
 
 	var indexfunc func(int, int) int
 	switch direction {
-	case BUCKET_ASCENDING:
+	case DIRECTION_ASCENDING:
 		indexfunc = func(l, i int) int { return i }
-	case BUCKET_DESCENDING:
+	case DIRECTION_DESCENDING:
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
