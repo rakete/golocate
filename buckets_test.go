@@ -8,11 +8,14 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"time"
 
 	"testing"
 )
 
 func TestBuckets(t *testing.T) {
+	log.Println("running TestBuckets")
+
 	display := DisplayChannel{
 		make(chan int),
 		make(chan int),
@@ -38,6 +41,10 @@ func TestBuckets(t *testing.T) {
 
 	//directories := []string{os.Getenv("HOME")}
 	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
+	if testing.Short() {
+		directories = []string{os.Getenv("HOME")}
+	}
+
 	newdirs := make(chan string)
 	cores := runtime.NumCPU()
 
@@ -51,9 +58,13 @@ func TestBuckets(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	log.Println("mem.byname", mem.byname.NumFiles())
-	log.Println("mem.bymodtime", mem.bymodtime.NumFiles())
-	log.Println("mem.bysize:", mem.bysize.NumFiles())
+	byname := mem.byname.Take(DIRECTION_ASCENDING, 1000)
+	bymodtime := mem.bymodtime.Take(DIRECTION_ASCENDING, 1000)
+	bysize := mem.bysize.Take(DIRECTION_ASCENDING, 1000)
+
+	log.Println("len(byname):", len(byname))
+	log.Println("len(bymodtime):", len(bymodtime))
+	log.Println("len(mem.bysize):", len(bysize))
 
 	//Print(mem.byname.(*NameBucket), 0)
 	//Print(mem.bymodtime.(*ModTimeBucket), 0)
@@ -89,7 +100,9 @@ func TestBuckets(t *testing.T) {
 		return true
 	})
 
-	WalkNodes(mem.bysize.(*SizeBucket), DIRECTION_ASCENDING, func(direction int, node *Node) bool {
+	WalkNodes(mem.bysize.(*SizeBucket), DIRECTION_ASCENDING, func(child Bucket) bool {
+		node := child.Node()
+
 		if !sort.IsSorted(SortedBySize(node.sorted)) {
 			t.Error("Found a node.sorted that is not sorted")
 			return false
@@ -101,9 +114,11 @@ func TestBuckets(t *testing.T) {
 		}
 
 		for _, entry := range node.sorted {
-			if !SizeThreshold(entry.size).Less(node.threshold) {
-				t.Error("Found an entry.size that is not less then its threshold")
-				return false
+			if node.threshold != nil {
+				if !SizeThreshold(entry.size).Less(node.threshold) {
+					t.Error("Found an entry.size that is not less then its threshold")
+					return false
+				}
 			}
 		}
 		return true
@@ -113,28 +128,32 @@ func TestBuckets(t *testing.T) {
 }
 
 func TestLess(t *testing.T) {
-	if "=.html" < "9" {
-		log.Println("=.html < 9")
+	if NameThreshold("=.html").Less(NameThreshold("9")) {
+		t.Error("=.html < 9")
 	}
 
-	if "=.html" < "1" {
-		log.Println("=.html < 1")
+	if NameThreshold("=.html").Less(NameThreshold("1")) {
+		t.Error("=.html < 1")
 	}
 
-	if "1.h" < "1" {
-		log.Println("1.h < 1")
+	if NameThreshold("b").Less(NameThreshold("aaaaaaaaaaaaaaaaaaaaaaaaa")) {
+		t.Error("b < aaaaaaaaaaaaaaaaaaaaaaaaa")
 	}
 
-	if "b" < "aaaaaaaaaaaaaaaaaaaaaaaaaa" {
-		log.Println("b < aaaaaaaaaaaaaaaaaaaaaaaaa")
+	if NameThreshold("a").Less(NameThreshold("0")) {
+		t.Error("a < 0")
 	}
 
-	if "a" < "0" {
-		log.Println("a < 0")
+	if NameThreshold("a").Less(NameThreshold("A")) {
+		t.Error("a < A")
 	}
 
-	if "a" < "A" {
-		log.Println("a < A")
+	if TimeThreshold(time.Now().Add(-time.Minute)).Less(TimeThreshold(time.Now())) {
+		t.Error("time.Now().Add(-time.Minute) < time.Now")
+	}
+
+	if SizeThreshold(1).Less(SizeThreshold(0)) {
+		t.Error("1 < 0")
 	}
 
 	log.Println("TestLess finished")
