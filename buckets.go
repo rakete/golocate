@@ -408,7 +408,9 @@ func WalkNodes(bucket Bucket, direction int, f func(bucket Bucket) bool) bool {
 				return false
 			}
 		} else {
-			f(direction, child.Node())
+			if !f(child) {
+				return false
+			}
 		}
 	}
 
