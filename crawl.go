@@ -84,7 +84,7 @@ func (entries *FileEntries) Take(sorttype, direction int, query *regexp.Regexp, 
 	var result []*FileEntry
 	for i := 0; i < len(sorted); i++ {
 		index := indexfunc(l, i)
-		if query == nil || query.MatchString(sorted[index].name) {
+		if query == nil || query.MatchString(sorted[index].name) || query.MatchString(sorted[index].path) {
 			result = append(result, sorted[index])
 		}
 

@@ -173,7 +173,7 @@ func (node *Node) Take(sorttype, direction int, query *regexp.Regexp, n int) []*
 
 		for i := 0; i < len(sorted); i++ {
 			index := indexfunc(l, i)
-			if query == nil || query.MatchString(sorted[index].name) {
+			if query == nil || query.MatchString(sorted[index].path) || query.MatchString(sorted[index].name) {
 				result = append(result, sorted[index])
 			}
 
