@@ -17,11 +17,7 @@ type ModTimeThreshold time.Time
 type SizeThreshold int64
 
 func (a NameThreshold) Less(b Threshold) bool {
-	if a[0] == '.' {
-		return a[1:] < b.(NameThreshold)
-	} else {
-		return a < b.(NameThreshold)
-	}
+	return a < b.(NameThreshold)
 }
 
 func (a NameThreshold) String() string {
@@ -78,8 +74,7 @@ func NewNameBucket() *Node {
 		bucket.children = append(bucket.children, &Node{threshold: NameThreshold(char)})
 	}
 
-	var typednil NameThreshold
-	bucket.children = append(bucket.children, &Node{threshold: typednil})
+	bucket.children = append(bucket.children, &Node{threshold: nil})
 
 	return bucket
 }
@@ -123,8 +118,7 @@ func NewModTimeBucket() *Node {
 
 	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-decade))})
 
-	var typednil ModTimeThreshold
-	bucket.children = append(bucket.children, &Node{threshold: typednil})
+	bucket.children = append(bucket.children, &Node{threshold: nil})
 
 	return bucket
 }
@@ -146,8 +140,7 @@ func NewSizeBucket() *Node {
 	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100000000)})
 	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000000000)})
 
-	var typednil SizeThreshold
-	bucket.children = append(bucket.children, &Node{threshold: typednil})
+	bucket.children = append(bucket.children, &Node{threshold: nil})
 
 	return bucket
 }
@@ -255,7 +248,7 @@ func (node *Node) Threshold(i int) Threshold {
 		return SizeThreshold(node.sorted[i].size)
 	}
 
-	return nil
+	return node.threshold
 }
 
 func (node *Node) Node() *Node {
@@ -357,7 +350,7 @@ func Insert(sorttype int, bucket Bucket, first int, files []*FileEntry) int {
 			}
 		}
 
-		if len(childnode.queue) >= 10000 {
+		if len(childnode.queue) >= 100000 {
 			Split(sorttype, child, 10)
 		}
 
@@ -412,7 +405,7 @@ func Split(sorttype int, bucket Bucket, numparts int) {
 	// with nodes containing very few entries and then one node containing almost all of them which
 	// would be further divided, resulting in a very deep subtree
 	inc := len(node.sorted) / numparts
-	if !bucket.Threshold(inc).Less(endthreshold) {
+	if bucket.Threshold(inc) == endthreshold {
 		return
 	}
 
