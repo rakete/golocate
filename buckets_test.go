@@ -51,7 +51,7 @@ func TestBuckets(t *testing.T) {
 
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
-	go Crawl(&wg, cores, mem, display, newdirs, finish)
+	go Crawl(&wg, cores*2, mem, display, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
 	}
@@ -66,7 +66,7 @@ func TestBuckets(t *testing.T) {
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
-	log.Println("len(mem.bysize):", len(bysize))
+	log.Println("len(bysize):", len(bysize))
 
 	//Print(mem.byname.(*NameBucket), 0)
 	//Print(mem.bymodtime.(*ModTimeBucket), 0)

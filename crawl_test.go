@@ -48,7 +48,7 @@ func TestFileEntries(t *testing.T) {
 
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
-	go Crawl(&wg, cores, mem, display, newdirs, finish)
+	go Crawl(&wg, cores*2, mem, display, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
 	}
