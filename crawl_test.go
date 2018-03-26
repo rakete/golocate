@@ -25,9 +25,9 @@ func TestFileEntries(t *testing.T) {
 		make(chan CrawlResult),
 	}
 	mem := ResultMemory{
-		new(NameEntries),
-		new(ModTimeEntries),
-		new(SizeEntries),
+		new(FileEntries),
+		new(FileEntries),
+		new(FileEntries),
 	}
 	finish := make(chan struct{})
 	go func() {
@@ -47,7 +47,7 @@ func TestFileEntries(t *testing.T) {
 
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
-	go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+	go Crawl(&wg, cores, mem, display, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
 	}
@@ -55,9 +55,9 @@ func TestFileEntries(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	byname := mem.byname.Take(DIRECTION_ASCENDING, 1000)
-	bymodtime := mem.bymodtime.Take(DIRECTION_ASCENDING, 1000)
-	bysize := mem.bysize.Take(DIRECTION_ASCENDING, 1000)
+	byname := mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, 1000)
+	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, 1000)
+	bysize := mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, 1000)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
@@ -81,9 +81,9 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		make(chan CrawlResult),
 	}
 	mem := ResultMemory{
-		new(NameEntries),
-		new(ModTimeEntries),
-		new(SizeEntries),
+		new(FileEntries),
+		new(FileEntries),
+		new(FileEntries),
 	}
 	go func() {
 		for {
@@ -102,15 +102,15 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
-		go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+		go Crawl(&wg, cores, mem, display, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
 		}
 		wg.Wait()
 		close(finish)
-		mem.byname.Take(DIRECTION_ASCENDING, 1000)
-		mem.bymodtime.Take(DIRECTION_ASCENDING, 1000)
-		mem.bysize.Take(DIRECTION_ASCENDING, 1000)
+		mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, 1000)
+		mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, 1000)
+		mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, 1000)
 	}
 }
 
@@ -146,14 +146,14 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
-		go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+		go Crawl(&wg, cores, mem, display, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
 		}
 		wg.Wait()
 		close(finish)
-		mem.byname.Take(DIRECTION_ASCENDING, 1000)
-		mem.bymodtime.Take(DIRECTION_ASCENDING, 1000)
-		mem.bysize.Take(DIRECTION_ASCENDING, 1000)
+		mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, 1000)
+		mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, 1000)
+		mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, 1000)
 	}
 }

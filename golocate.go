@@ -199,11 +199,11 @@ func updateView(liststore *gtk.ListStore, display DisplayChannel, sorttype chan 
 		select {
 		case currentsort = <-sorttype:
 		case files := <-display.byname:
-			byname = files.(*NameBucket)
+			byname = files.(*Node)
 		case files := <-display.bymodtime:
-			bymodtime = files.(*ModTimeBucket)
+			bymodtime = files.(*Node)
 		case files := <-display.bysize:
-			bysize = files.(*SizeBucket)
+			bysize = files.(*Node)
 		}
 	}
 }
@@ -218,9 +218,9 @@ func main() {
 	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
 
 	mem := ResultMemory{
-		new(NameBucket),
-		new(ModTimeBucket),
-		new(SizeBucket),
+		NewNameBucket(),
+		NewModTimeBucket(),
+		NewSizeBucket(),
 	}
 	display := DisplayChannel{make(chan int), make(chan int), make(chan CrawlResult), make(chan CrawlResult), make(chan CrawlResult)}
 	newdirs := make(chan string)
@@ -240,7 +240,7 @@ func main() {
 		go updateView(liststore, display, sorttype)
 		sorttype <- SORT_BY_SIZE
 
-		go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+		go Crawl(&wg, cores, mem, display, newdirs, finish)
 		log.Println("starting Crawl on", cores, "cores")
 		for _, dir := range directories {
 			newdirs <- dir

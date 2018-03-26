@@ -50,7 +50,7 @@ func TestBuckets(t *testing.T) {
 
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
-	go Crawl(&wg, cores, mem, display, newdirs, finish, nil)
+	go Crawl(&wg, cores, mem, display, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
 	}
@@ -58,9 +58,9 @@ func TestBuckets(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	byname := mem.byname.Take(DIRECTION_ASCENDING, 1000)
-	bymodtime := mem.bymodtime.Take(DIRECTION_ASCENDING, 1000)
-	bysize := mem.bysize.Take(DIRECTION_ASCENDING, 1000)
+	byname := mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, 1000)
+	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, 1000)
+	bysize := mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, 1000)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
@@ -71,7 +71,7 @@ func TestBuckets(t *testing.T) {
 	//Print(mem.bysize.(*SizeBucket), 0)
 
 	var lastentry *FileEntry
-	WalkEntries(mem.bysize.(*SizeBucket), DIRECTION_ASCENDING, func(entry *FileEntry) bool {
+	WalkEntries(mem.bysize.(*Node), DIRECTION_ASCENDING, func(entry *FileEntry) bool {
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -86,7 +86,7 @@ func TestBuckets(t *testing.T) {
 	})
 
 	lastentry = nil
-	WalkEntries(mem.bysize.(*SizeBucket), DIRECTION_DESCENDING, func(entry *FileEntry) bool {
+	WalkEntries(mem.bysize.(*Node), DIRECTION_DESCENDING, func(entry *FileEntry) bool {
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -100,7 +100,7 @@ func TestBuckets(t *testing.T) {
 		return true
 	})
 
-	WalkNodes(mem.bysize.(*SizeBucket), DIRECTION_ASCENDING, func(child Bucket) bool {
+	WalkNodes(mem.bysize.(*Node), DIRECTION_ASCENDING, func(child Bucket) bool {
 		node := child.Node()
 
 		if !sort.IsSorted(SortedBySize(node.sorted)) {
@@ -148,7 +148,7 @@ func TestLess(t *testing.T) {
 		t.Error("a < A")
 	}
 
-	if TimeThreshold(time.Now().Add(-time.Minute)).Less(TimeThreshold(time.Now())) {
+	if ModTimeThreshold(time.Now().Add(-time.Minute)).Less(ModTimeThreshold(time.Now())) {
 		t.Error("time.Now().Add(-time.Minute) < time.Now")
 	}
 

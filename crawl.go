@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 	"path"
-	"regexp"
+	//"regexp"
 	//"strconv"
 	"io/ioutil"
 	"sync"
@@ -46,58 +46,45 @@ const (
 )
 
 type CrawlResult interface {
-	Merge(files []*FileEntry)
-	Take(direction, n int) []*FileEntry
+	Merge(sorttype int, files []*FileEntry)
+	Take(sorttype, direction, n int) []*FileEntry //, query *regexp.Regexp
 	NumFiles() int
 }
 
-type NameEntries []*FileEntry
-type ModTimeEntries []*FileEntry
-type SizeEntries []*FileEntry
+type FileEntries []*FileEntry
 
-func (entries *NameEntries) Merge(files []*FileEntry) {
-	*entries = NameEntries(append(*entries, files...))
+func (entries *FileEntries) Merge(_ int, files []*FileEntry) {
+	*entries = append(*entries, files...)
 }
 
-func (entries *NameEntries) Take(direction, n int) []*FileEntry {
-	sorted := sortFileEntries(SortedByName(*entries)).(SortedByName)
+func (entries *FileEntries) Take(sorttype, direction, n int) []*FileEntry {
+	var sorted FileEntries
+	switch sorttype {
+	case SORT_BY_NAME:
+		sorted = FileEntries(sortFileEntries(SortedByName(*entries)).(SortedByName))
+	case SORT_BY_MODTIME:
+		sorted = FileEntries(sortFileEntries(SortedByModTime(*entries)).(SortedByModTime))
+	case SORT_BY_SIZE:
+		sorted = FileEntries(sortFileEntries(SortedBySize(*entries)).(SortedBySize))
+	}
+
 	if n > len(sorted) {
 		n = len(sorted)
 	}
-	return sorted[:n]
-}
 
-func (entries *NameEntries) NumFiles() int { return len(*entries) }
-
-func (entries *ModTimeEntries) Merge(files []*FileEntry) {
-	*entries = ModTimeEntries(append(*entries, files...))
-}
-
-func (entries *ModTimeEntries) Take(direction, n int) []*FileEntry {
-	sorted := sortFileEntries(SortedByModTime(*entries)).(SortedByModTime)
-	if n > len(sorted) {
-		n = len(sorted)
+	var result []*FileEntry
+	for i := 0; i < n; i++ {
+		//if query == nil || query.MatchString(sorted[i].name) {
+		result = append(result, sorted[i])
+		//}
 	}
-	return sorted[:n]
+
+	return result
 }
 
-func (entries *ModTimeEntries) NumFiles() int { return len(*entries) }
+func (entries *FileEntries) NumFiles() int { return len(*entries) }
 
-func (entries *SizeEntries) Merge(files []*FileEntry) {
-	*entries = SizeEntries(append(*entries, files...))
-}
-
-func (entries *SizeEntries) Take(direction, n int) []*FileEntry {
-	sorted := sortFileEntries(SortedBySize(*entries)).(SortedBySize)
-	if n > len(sorted) {
-		n = len(sorted)
-	}
-	return sorted[:n]
-}
-
-func (entries *SizeEntries) NumFiles() int { return len(*entries) }
-
-func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, collect FilesChannel, dir string, query *regexp.Regexp) {
+func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, collect FilesChannel, dir string) {
 	entries, err := ioutil.ReadDir(dir)
 	<-maxproc
 
@@ -111,7 +98,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 			entrypath := path.Join(dir, entry.Name())
 			if entry.IsDir() {
 				newdirs <- entrypath
-			} else if query == nil || query.MatchString(entrypath) {
+			} else {
 				matches = append(matches, entrypath)
 			}
 		}
@@ -147,7 +134,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	defer wg.Done()
 }
 
-func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChannel, newdirs chan string, finish chan struct{}, query *regexp.Regexp) {
+func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChannel, newdirs chan string, finish chan struct{}) {
 	wg.Add(1)
 
 	collect := FilesChannel{make(chan SortedByName), make(chan SortedByModTime), make(chan SortedBySize)}
@@ -158,7 +145,7 @@ func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChann
 			case dir := <-newdirs:
 				wg.Add(1)
 				maxproc <- struct{}{}
-				go visit(wg, maxproc, newdirs, collect, dir, query)
+				go visit(wg, maxproc, newdirs, collect, dir)
 			case <-finish:
 				return
 			}
@@ -174,7 +161,7 @@ func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChann
 				copy(newbyname, files)
 
 				newbyname = sortFileEntries(SortedByName(newbyname)).(SortedByName)
-				mem.byname.Merge(newbyname)
+				mem.byname.Merge(SORT_BY_NAME, newbyname)
 
 				display.byname <- mem.byname
 				wg.Done()
@@ -192,7 +179,7 @@ func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChann
 				copy(newbymodtime, files)
 
 				newbymodtime = sortFileEntries(SortedByModTime(newbymodtime)).(SortedByModTime)
-				mem.bymodtime.Merge(newbymodtime)
+				mem.bymodtime.Merge(SORT_BY_MODTIME, newbymodtime)
 
 				display.bymodtime <- mem.bymodtime
 				wg.Done()
@@ -210,7 +197,7 @@ func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChann
 				copy(newbysize, files)
 
 				newbysize = sortFileEntries(SortedBySize(newbysize)).(SortedBySize)
-				mem.bysize.Merge(newbysize)
+				mem.bysize.Merge(SORT_BY_SIZE, newbysize)
 
 				display.bysize <- mem.bysize
 				wg.Done()
