@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	//"sort"
+	"regexp"
 	"time"
 )
 
@@ -155,23 +156,36 @@ func (node *Node) Merge(sorttype int, files []*FileEntry) {
 	Insert(sorttype, node, 0, files)
 }
 
-func (node *Node) Take(sorttype, direction, n int) []*FileEntry {
+func (node *Node) Take(sorttype, direction int, query *regexp.Regexp, n int) []*FileEntry {
+	var indexfunc func(int, int) int
+	switch direction {
+	case DIRECTION_ASCENDING:
+		indexfunc = func(l, i int) int { return i }
+	case DIRECTION_DESCENDING:
+		indexfunc = func(l, j int) int { return l - 1 - j }
+	}
+
 	var result []*FileEntry
 	WalkNodes(node, direction, func(child Bucket) bool {
 		child.Sort(sorttype)
-		result = append(result, child.Node().sorted...)
+		sorted := child.Node().sorted
+		l := len(sorted)
 
-		if len(result) >= n {
-			return false
-		} else {
-			return true
+		for i := 0; i < len(sorted); i++ {
+			index := indexfunc(l, i)
+			if query == nil || query.MatchString(sorted[index].name) {
+				result = append(result, sorted[index])
+			}
+
+			if len(result) >= n {
+				return false
+			}
 		}
+
+		return true
 	})
 
-	if n > len(result) {
-		n = len(result)
-	}
-	return result[:n]
+	return result
 }
 
 func (node *Node) NumFiles() int {

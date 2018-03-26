@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	//"time"
+	"regexp"
 	"runtime"
 	"sort"
 	"sync"
@@ -58,9 +59,10 @@ func TestBuckets(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	byname := mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, 1000)
-	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, 1000)
-	bysize := mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, 1000)
+	query, _ := regexp.Compile("golocate")
+	byname := mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, query, 1000)
+	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, query, 1000)
+	bysize := mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, query, 1000)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))

@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 	"path"
-	//"regexp"
+	"regexp"
 	//"strconv"
 	"io/ioutil"
 	"sync"
@@ -47,7 +47,7 @@ const (
 
 type CrawlResult interface {
 	Merge(sorttype int, files []*FileEntry)
-	Take(sorttype, direction, n int) []*FileEntry //, query *regexp.Regexp
+	Take(sorttype, direction int, query *regexp.Regexp, n int) []*FileEntry
 	NumFiles() int
 }
 
@@ -57,7 +57,15 @@ func (entries *FileEntries) Merge(_ int, files []*FileEntry) {
 	*entries = append(*entries, files...)
 }
 
-func (entries *FileEntries) Take(sorttype, direction, n int) []*FileEntry {
+func (entries *FileEntries) Take(sorttype, direction int, query *regexp.Regexp, n int) []*FileEntry {
+	var indexfunc func(int, int) int
+	switch direction {
+	case DIRECTION_ASCENDING:
+		indexfunc = func(l, i int) int { return i }
+	case DIRECTION_DESCENDING:
+		indexfunc = func(l, j int) int { return l - 1 - j }
+	}
+
 	var sorted FileEntries
 	switch sorttype {
 	case SORT_BY_NAME:
@@ -68,15 +76,17 @@ func (entries *FileEntries) Take(sorttype, direction, n int) []*FileEntry {
 		sorted = FileEntries(sortFileEntries(SortedBySize(*entries)).(SortedBySize))
 	}
 
-	if n > len(sorted) {
-		n = len(sorted)
+	l := len(sorted)
+	if n > l {
+		n = l
 	}
 
 	var result []*FileEntry
 	for i := 0; i < n; i++ {
-		//if query == nil || query.MatchString(sorted[i].name) {
-		result = append(result, sorted[i])
-		//}
+		index := indexfunc(l, i)
+		if query == nil || query.MatchString(sorted[index].name) {
+			result = append(result, sorted[index])
+		}
 	}
 
 	return result

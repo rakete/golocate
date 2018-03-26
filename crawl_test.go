@@ -5,6 +5,7 @@ import (
 	"path"
 	//"log"
 	"log"
+	"regexp"
 	"runtime"
 	"sync"
 
@@ -55,9 +56,10 @@ func TestFileEntries(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	byname := mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, 1000)
-	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, 1000)
-	bysize := mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, 1000)
+	query, _ := regexp.Compile("golocate")
+	byname := mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, query, 1000)
+	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, query, 1000)
+	bysize := mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, query, 1000)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
@@ -108,9 +110,11 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		}
 		wg.Wait()
 		close(finish)
-		mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, 1000)
-		mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, 1000)
-		mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, 1000)
+
+		query, _ := regexp.Compile(".*")
+		mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, query, 1000)
+		mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, query, 1000)
+		mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, query, 1000)
 	}
 }
 
@@ -152,8 +156,10 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		}
 		wg.Wait()
 		close(finish)
-		mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, 1000)
-		mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, 1000)
-		mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, 1000)
+
+		query, _ := regexp.Compile(".*")
+		mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, query, 1000)
+		mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, query, 1000)
+		mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, query, 1000)
 	}
 }
