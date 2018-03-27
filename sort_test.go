@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"sort"
-	"time"
 
 	"testing"
 )
@@ -154,11 +153,9 @@ func BenchmarkSortMergeByName(b *testing.B) {
 	b.StopTimer()
 
 	directories := []string{
-		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
 		os.Getenv("HOME") + "/go/src/golocate/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
-		os.Getenv("HOME") + "/.local/share/Trash/files",
 	}
 	var cache [][]*FileEntry
 	for _, dir := range directories {
@@ -179,11 +176,9 @@ func BenchmarkSortMergeByModTime(b *testing.B) {
 	b.StopTimer()
 
 	directories := []string{
-		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
 		os.Getenv("HOME") + "/go/src/golocate/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
-		os.Getenv("HOME") + "/.local/share/Trash/files",
 	}
 	var cache [][]*FileEntry
 	for _, dir := range directories {
@@ -204,11 +199,9 @@ func BenchmarkSortMergeBySize(b *testing.B) {
 	b.StopTimer()
 
 	directories := []string{
-		os.Getenv("HOME") + "/.local/share/Zeal/Zeal/docsets/NET_Framework.docset/Contents/Resources/Documents/msdn.microsoft.com/en-us/library/",
 		os.Getenv("HOME") + "/go/src/golocate/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
-		os.Getenv("HOME") + "/.local/share/Trash/files",
 	}
 	var cache [][]*FileEntry
 	for _, dir := range directories {
@@ -222,14 +215,5 @@ func BenchmarkSortMergeBySize(b *testing.B) {
 		for _, files := range cache {
 			merged = sortMerge(SORT_BY_SIZE, merged, files)
 		}
-	}
-}
-
-func BenchmarkInt64(b *testing.B) {
-	u := int64(time.Now().Unix())
-	v := int64(time.Now().Unix())
-	var results []bool
-	for i := 0; i < b.N; i++ {
-		results = append(results, u < v)
 	}
 }
