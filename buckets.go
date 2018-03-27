@@ -62,8 +62,8 @@ type Node struct {
 type Bucket interface {
 	Less(entry *FileEntry) bool
 	Sort(sorttype int)
-	Branch(threshold Threshold, entries []*FileEntry)
-	Threshold(i int) Threshold
+	AddBranch(threshold Threshold, entries []*FileEntry)
+	ThresholdSplit(i int) Threshold
 	Node() *Node
 }
 
@@ -225,7 +225,7 @@ func (node *Node) Sort(sorttype int) {
 	}
 }
 
-func (node *Node) Branch(threshold Threshold, entries []*FileEntry) {
+func (node *Node) AddBranch(threshold Threshold, entries []*FileEntry) {
 	newnode := &Node{
 		threshold: threshold,
 		sorted:    make([]*FileEntry, len(entries)),
@@ -234,7 +234,7 @@ func (node *Node) Branch(threshold Threshold, entries []*FileEntry) {
 	node.children = append(node.children, newnode)
 }
 
-func (node *Node) Threshold(i int) Threshold {
+func (node *Node) ThresholdSplit(i int) Threshold {
 	if i >= len(node.sorted) {
 		return node.threshold
 	}
@@ -394,7 +394,7 @@ func Split(sorttype int, bucket Bucket, numparts int) {
 	// - endthreshold is needed to decide if entries are the same as the last entry, meaning there is
 	// no other threshold to be found among the entries at which the sorted slice can be split and we can
 	// just put all those entries in a child and finish
-	endthreshold := bucket.Threshold(len(node.sorted) - 1)
+	endthreshold := bucket.ThresholdSplit(len(node.sorted) - 1)
 
 	// - we compute inc with which we can increase an index numparts times and split
 	// the slice in inc sized parts
@@ -405,7 +405,7 @@ func Split(sorttype int, bucket Bucket, numparts int) {
 	// with nodes containing very few entries and then one node containing almost all of them which
 	// would be further divided, resulting in a very deep subtree
 	inc := len(node.sorted) / numparts
-	if bucket.Threshold(inc) == endthreshold {
+	if bucket.ThresholdSplit(inc) == endthreshold {
 		return
 	}
 
@@ -441,23 +441,23 @@ func Split(sorttype int, bucket Bucket, numparts int) {
 		// - to make sure that the b index seperates two slice parts such that there are no entries
 		// with equal size that end up in both resulting parts, we increase b when the sizes of the
 		// entries at b-1 and b are not less, until they are
-		for b < len(node.sorted) && (!bucket.Threshold(b - 1).Less(bucket.Threshold(b))) {
+		for b < len(node.sorted) && (!bucket.ThresholdSplit(b - 1).Less(bucket.ThresholdSplit(b))) {
 			b += 1
 		}
 
 		// - if we are in the last loop iteration, or if all remaining entries have the same size as
 		// the last entry, then we set b to len(node.sorted) so that all remaining entries end up
 		// in the last part
-		if b < len(node.sorted) && (i == numparts-1 || !bucket.Threshold(b).Less(endthreshold)) {
+		if b < len(node.sorted) && (i == numparts-1 || !bucket.ThresholdSplit(b).Less(endthreshold)) {
 			b = len(node.sorted)
 		}
 
 		// - if b is at the end of node.sorted we use the parents node.threshold, the last child
 		// always gets its parents threshold
-		threshold := bucket.Threshold(b)
+		threshold := bucket.ThresholdSplit(b)
 
 		// - create new child, copy entries, set a = b
-		bucket.Branch(threshold, node.sorted[a:b])
+		bucket.AddBranch(threshold, node.sorted[a:b])
 
 		a = b
 	}
