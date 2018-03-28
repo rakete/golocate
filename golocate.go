@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
-	"gotk3/gtk"
+	"github.com/gotk3/gotk3/gtk"
 )
 
 const (
