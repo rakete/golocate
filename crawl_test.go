@@ -48,6 +48,7 @@ func TestFileEntries(t *testing.T) {
 
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
+	wg.Add(1)
 	go Crawl(&wg, cores*2, mem, display, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
@@ -104,6 +105,7 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
+		wg.Add(1)
 		go Crawl(&wg, cores, mem, display, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
