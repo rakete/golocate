@@ -273,6 +273,7 @@ func main() {
 		go updateView(liststore, display, sorttype)
 		sorttype <- SORT_BY_SIZE
 
+		wg.Add(1)
 		go Crawl(&wg, cores, mem, display, newdirs, finish)
 		log.Println("starting Crawl on", cores, "cores")
 		for _, dir := range directories {
