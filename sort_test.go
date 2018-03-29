@@ -96,7 +96,13 @@ func BenchmarkSortedBySize(b *testing.B) {
 }
 
 func TestSortMerge(t *testing.T) {
-	directories := []string{os.Getenv("HOME") + "/go/src/golocate/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/", os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/"}
+	directories := []string{
+		os.Getenv("HOME") + "/go/src/golocate/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/gtk/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/glib/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/gdk/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
+	}
 	var allfiles, byname, bymodtime, bysize []*FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles([]string{dir})
@@ -154,7 +160,9 @@ func BenchmarkSortMergeByName(b *testing.B) {
 
 	directories := []string{
 		os.Getenv("HOME") + "/go/src/golocate/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/gtk/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/glib/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/gdk/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
 	}
 	var cache [][]*FileEntry
@@ -177,7 +185,9 @@ func BenchmarkSortMergeByModTime(b *testing.B) {
 
 	directories := []string{
 		os.Getenv("HOME") + "/go/src/golocate/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/gtk/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/glib/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/gdk/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
 	}
 	var cache [][]*FileEntry
@@ -200,7 +210,9 @@ func BenchmarkSortMergeBySize(b *testing.B) {
 
 	directories := []string{
 		os.Getenv("HOME") + "/go/src/golocate/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/gtk/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/glib/",
+		os.Getenv("HOME") + "/go/src/golocate/vendor/gitbuc.com/gotk3/gotk3/gdk/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/gotk3/cairo/",
 	}
 	var cache [][]*FileEntry
