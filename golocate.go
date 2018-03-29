@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gotk3/gotk3/gdk"
+	//b"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -62,20 +62,45 @@ func setupTreeView() (*gtk.TreeView, *gtk.ListStore) {
 	return treeView, liststore
 }
 
-func setupSearchBar() *gtk.SearchBar {
+func setupSearchBar() (*gtk.SearchBar, *gtk.SearchEntry) {
 	searchbar, err := gtk.SearchBarNew()
 	if err != nil {
 		log.Fatal("Could not create search bar:", err)
 	}
+	searchbar.SetSearchMode(true)
 
-	return searchbar
+	horizontalbox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	if err != nil {
+		log.Fatal("Unable to create box:", err)
+	}
+
+	searchentry, err := gtk.SearchEntryNew()
+	if err != nil {
+		log.Fatal("Could not create search entry:", err)
+	}
+	searchentry.SetSizeRequest(400, 0)
+
+	searchbar.Add(horizontalbox)
+	horizontalbox.PackStart(searchentry, true, true, 0)
+	searchbar.ConnectEntry(searchentry)
+
+	return searchbar, searchentry
 }
 
-func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar *gtk.SearchBar, title string) {
+func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar *gtk.SearchBar, title string) *gtk.ApplicationWindow {
 	win, err := gtk.ApplicationWindowNew(application)
 	if err != nil {
 		log.Fatal("Unable to create window:", err)
 	}
+
+	// win, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
+	// if err != nil {
+	// 	log.Fatal("Unable to create window:", err)
+	// }
+	// win.Connect("destroy", func() {
+	// 	gtk.MainQuit()
+	// })
+	// application.AddWindow(win)
 
 	header, err := gtk.HeaderBarNew()
 	if err != nil {
@@ -83,7 +108,7 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 	}
 	header.SetShowCloseButton(true)
 	header.SetTitle(title)
-	header.SetSubtitle("subtitle")
+	header.SetSubtitle("finding files with fearless concurrency")
 
 	mbtn, err := gtk.MenuButtonNew()
 	if err != nil {
@@ -94,9 +119,7 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 	if menu == nil {
 		log.Fatal("Could not create menu (nil)")
 	}
-	menu.Append("Search", "app.search")
-
-	menu.Append("Clear", "app.clear")
+	menu.Append("Crawl", "app.crawl")
 
 	menu.Append("Quit", "app.quit")
 
@@ -109,7 +132,7 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 	win.SetPosition(gtk.WIN_POS_CENTER)
 	win.SetDefaultSize(800, 600)
 
-	box, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	verticalbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		log.Fatal("Unable to create box:", err)
 	}
@@ -119,11 +142,13 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 		log.Fatal("unable to create scrolled window:", err)
 	}
 
-	win.Add(box)
-	box.PackStart(searchbar, false, false, 0)
+	win.Add(verticalbox)
+	verticalbox.PackStart(searchbar, false, false, 0)
 	scrolledwindow.Add(treeview)
-	box.PackStart(scrolledwindow, true, true, 5)
+	verticalbox.PackStart(scrolledwindow, true, true, 5)
 	win.ShowAll()
+
+	return win
 }
 
 func addEntry(liststore *gtk.ListStore, entry FileEntry) gtk.TreeIter {
@@ -210,6 +235,8 @@ func updateView(liststore *gtk.ListStore, display DisplayChannel, sorttype chan 
 }
 
 func main() {
+	gtk.Init(nil)
+
 	const appID = "com.github.rakete.golocate"
 	application, err := gtk.ApplicationNew(appID, glib.APPLICATION_FLAGS_NONE)
 	if err != nil {
@@ -231,12 +258,17 @@ func main() {
 	var liststore *gtk.ListStore
 	var treeview *gtk.TreeView
 	var searchbar *gtk.SearchBar
+	var searchentry *gtk.SearchEntry
 	sorttype := make(chan int)
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
 		treeview, liststore = setupTreeView()
-		searchbar = setupSearchBar()
+		searchbar, searchentry = setupSearchBar()
+
+		searchentry.Connect("search-changed", func() {
+			log.Println("ping")
+		})
 
 		go updateView(liststore, display, sorttype)
 		sorttype <- SORT_BY_SIZE
@@ -249,24 +281,15 @@ func main() {
 
 		setupWindow(application, treeview, searchbar, "golocate")
 
-		aSearch := glib.SimpleActionNew("search", nil)
-		aSearch.Connect("activate", func() {
+		aCrawl := glib.SimpleActionNew("crawl", nil)
+		aCrawl.Connect("activate", func() {
 			go func() {
-				glib.IdleAdd(liststore.Clear)
 				for _, dir := range directories {
 					newdirs <- dir
 				}
 			}()
 		})
-		application.AddAction(aSearch)
-
-		aClear := glib.SimpleActionNew("clear", nil)
-		aClear.Connect("activate", func() {
-			go func() {
-				glib.IdleAdd(liststore.Clear)
-			}()
-		})
-		application.AddAction(aClear)
+		application.AddAction(aCrawl)
 
 		aQuit := glib.SimpleActionNew("quit", nil)
 		aQuit.Connect("activate", func() {
