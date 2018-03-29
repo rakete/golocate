@@ -152,6 +152,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
+		wg.Add(1)
 		go Crawl(&wg, cores, mem, display, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
