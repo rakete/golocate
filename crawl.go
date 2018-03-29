@@ -149,8 +149,6 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 }
 
 func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChannel, newdirs chan string, finish chan struct{}) {
-	wg.Add(1)
-
 	collect := FilesChannel{make(chan SortedByName), make(chan SortedByModTime), make(chan SortedBySize)}
 	maxproc := make(chan struct{}, cores)
 	go func() {
