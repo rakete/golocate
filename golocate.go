@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	//"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -280,7 +280,10 @@ func main() {
 			newdirs <- dir
 		}
 
-		setupWindow(application, treeview, searchbar, "golocate")
+		win := setupWindow(application, treeview, searchbar, "golocate")
+		win.Window.Connect("key-press-event", func(win *gtk.ApplicationWindow, ev *gdk.Event) {
+			searchbar.HandleEvent(ev)
+		})
 
 		aCrawl := glib.SimpleActionNew("crawl", nil)
 		aCrawl.Connect("activate", func() {
