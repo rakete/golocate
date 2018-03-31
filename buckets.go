@@ -4,6 +4,7 @@ import (
 	"fmt"
 	//"sort"
 	"regexp"
+	"sync"
 	"time"
 )
 
@@ -54,6 +55,7 @@ func (a SizeThreshold) String() string {
 
 type Node struct {
 	threshold Threshold
+	mutex     sync.Mutex
 	queue     []*FileEntry
 	sorted    []*FileEntry
 	children  []Bucket
@@ -160,10 +162,15 @@ func (node *Node) Take(sorttype, direction int, query *regexp.Regexp, n int) []*
 
 	var result []*FileEntry
 	WalkNodes(node, direction, func(child Bucket) bool {
-		child.Sort(sorttype)
-		sorted := child.Node().sorted
-		l := len(sorted)
+		childnode := child.Node()
 
+		defer childnode.mutex.Unlock()
+		childnode.mutex.Lock()
+
+		child.Sort(sorttype)
+
+		sorted := childnode.sorted
+		l := len(sorted)
 		for i := 0; i < len(sorted); i++ {
 			index := indexfunc(l, i)
 			if query == nil || query.MatchString(sorted[index].path) || query.MatchString(sorted[index].name) {
@@ -297,18 +304,23 @@ func WalkNodes(bucket Bucket, direction int, f func(bucket Bucket) bool) bool {
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
+	node.mutex.Lock()
 	for i := range node.children {
 		child := node.children[indexfunc(len(node.children), i)]
 		if len(child.Node().children) > 0 {
+			node.mutex.Unlock()
 			if !WalkNodes(child, direction, f) {
 				return false
 			}
+			node.mutex.Lock()
 		} else {
 			if !f(child) {
+				node.mutex.Unlock()
 				return false
 			}
 		}
 	}
+	node.mutex.Unlock()
 
 	return true
 }
@@ -341,9 +353,12 @@ func Insert(sorttype int, bucket Bucket, first int, files []*FileEntry) int {
 	i := first
 	for _, child := range node.children {
 		childnode := child.Node()
+		childnode.mutex.Lock()
 		for i < len(files) && child.Less(files[i]) {
 			if len(childnode.children) > 0 {
+				childnode.mutex.Unlock()
 				i = Insert(sorttype, child, i, files)
+				childnode.mutex.Lock()
 			} else {
 				childnode.queue = append(childnode.queue, files[i])
 				i += 1
@@ -353,6 +368,7 @@ func Insert(sorttype int, bucket Bucket, first int, files []*FileEntry) int {
 		if len(childnode.queue) >= 100000 {
 			Split(sorttype, child, 10)
 		}
+		childnode.mutex.Unlock()
 
 		if i >= len(files) {
 			break
