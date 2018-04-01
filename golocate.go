@@ -189,51 +189,94 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	}
 }
 
-func updateView(liststore *gtk.ListStore, display DisplayChannel, sorttype chan int) {
-	var byname, bymodtime, bysize Bucket
-	_, _, _ = byname, bymodtime, bysize
+func updateList(bucket Bucket, liststore *gtk.ListStore, sorttype, direction int, query *regexp.Regexp, n int) {
+	if bucket == nil {
+		return
+	}
+
+	var entries []*FileEntry
+	entries = bucket.Node().Take(sorttype, direction, nil, n)
+
+	glib.IdleAdd(func() {
+		i := 0
+		iter, valid := liststore.GetIterFirst()
+		for i < len(entries) && valid == true {
+			updateEntry(iter, liststore, entries[i])
+			valid = liststore.IterNext(iter)
+			i += 1
+		}
+		if i < len(entries) {
+			for _, entry := range entries {
+				addEntry(liststore, entry)
+				i += 1
+			}
+		}
+	})
+}
+
+func Controller(liststore *gtk.ListStore, display DisplayChannel, sorttype chan int) {
+	var byname, bysize, bymodtime Bucket
 	currentsort := -1
+	currentdirection := DIRECTION_DESCENDING
 
 	go func() {
 		for {
 			select {
-			case <-time.After(1 * time.Second):
-				var entries []FileEntry
-				switch currentsort {
-				case SORT_BY_NAME:
-				case SORT_BY_MODTIME:
-				case SORT_BY_SIZE:
+			case newsorttype := <-sorttype:
+				currentsort = newsorttype
+				if currentsort == newsorttype && currentdirection == DIRECTION_ASCENDING {
+					currentdirection = DIRECTION_DESCENDING
+				} else {
+					currentdirection = DIRECTION_ASCENDING
 				}
-
-				glib.IdleAdd(func() {
-					n := 0
-					iter, valid := liststore.GetIterFirst()
-					for n < len(entries) && valid == true {
-						updateEntry(iter, liststore, entries[n])
-						valid = liststore.IterNext(iter)
-						n += 1
-					}
-					if n < len(entries) && len(entries) > 10000 {
-						for _, entry := range entries[n:10000] {
-							addEntry(liststore, entry)
-							n += 1
-						}
-					}
-				})
+			case <-time.After(1 * time.Second):
 			}
+
+			var currentbucket Bucket
+			switch currentsort {
+			case SORT_BY_NAME:
+				currentbucket = byname
+			case SORT_BY_SIZE:
+				currentbucket = bysize
+			case SORT_BY_MODTIME:
+				currentbucket = bymodtime
+			}
+			updateList(currentbucket, liststore, currentsort, currentdirection, nil, 100)
 		}
 	}()
 
 	for {
 		select {
-		case currentsort = <-sorttype:
-		case files := <-display.byname:
-			byname = files.(*Node)
-		case files := <-display.bymodtime:
-			bymodtime = files.(*Node)
-		case files := <-display.bysize:
-			bysize = files.(*Node)
+		case bucket := <-display.byname:
+			byname = bucket.(*Node)
+		case bucket := <-display.bymodtime:
+			bymodtime = bucket.(*Node)
+		case bucket := <-display.bysize:
+			bysize = bucket.(*Node)
 		}
+	}
+}
+
+func makeColumnSortToggle(treeview *gtk.TreeView, clickedcolumn int, sorttypechan chan int, sorttype int) func() {
+	return func() {
+		sorttypechan <- sorttype
+
+		for i := 0; i < int(treeview.GetNColumns()); i++ {
+			column := treeview.GetColumn(i)
+
+			if i == clickedcolumn {
+				direction := column.GetSortOrder()
+				if direction == gtk.GTK_SORT_ASCENDING {
+					column.SetSortOrder(gtk.GTK_SORT_DESCENDING)
+				} else {
+					column.SetSortOrder(gtk.GTK_SORT_ASCENDING)
+				}
+			} else {
+				column.SetSortOrder(gtk.GTK_SORT_ASCENDING)
+			}
+
+		}
+
 	}
 }
 
@@ -262,19 +305,36 @@ func main() {
 	var treeview *gtk.TreeView
 	var searchbar *gtk.SearchBar
 	var searchentry *gtk.SearchEntry
-	sorttype := make(chan int)
+	sorttypechan := make(chan int)
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
 		treeview, liststore = setupTreeView()
 		searchbar, searchentry = setupSearchBar()
 
+		go Controller(liststore, display, sorttypechan)
+		sorttypechan <- SORT_BY_SIZE
+
+		for i := 0; i < int(treeview.GetNColumns()); i++ {
+			column := treeview.GetColumn(i)
+			title := column.GetTitle()
+			switch title {
+			case "Name":
+				column.Connect("clicked", makeColumnSortToggle(treeview, i, sorttypechan, SORT_BY_NAME))
+			case "Size":
+				column.Connect("clicked", makeColumnSortToggle(treeview, i, sorttypechan, SORT_BY_SIZE))
+			case "Modification Time":
+				column.Connect("clicked", makeColumnSortToggle(treeview, i, sorttypechan, SORT_BY_MODTIME))
+			default:
+				column.Connect("clicked", func() {
+					log.Println("can not sort by", title)
+				})
+			}
+		}
+
 		searchentry.Connect("search-changed", func() {
 			log.Println("ping")
 		})
-
-		go updateView(liststore, display, sorttype)
-		sorttype <- SORT_BY_SIZE
 
 		wg.Add(1)
 		go Crawler(&wg, cores, mem, display, newdirs, finish)
