@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
+	//"path"
+	"regexp"
 	"runtime"
 	"sync"
 	"time"
@@ -15,7 +16,8 @@ import (
 )
 
 const (
-	COLUMN_FILENAME = iota
+	COLUMN_NAME = iota
+	COLUMN_PATH
 	COLUMN_SIZE
 	COLUMN_MODTIME
 )
@@ -41,25 +43,28 @@ func createColumn(title string, id int) *gtk.TreeViewColumn {
 }
 
 func setupTreeView() (*gtk.TreeView, *gtk.ListStore) {
-	treeView, err := gtk.TreeViewNew()
+	treeview, err := gtk.TreeViewNew()
 	if err != nil {
 		log.Fatal("Unable to create tree view:", err)
 	}
 
-	treeView.AppendColumn(createColumn("Filename", COLUMN_FILENAME))
-	treeView.AppendColumn(createColumn("Size", COLUMN_SIZE))
-	treeView.AppendColumn(createColumn("Modification Time", COLUMN_MODTIME))
+	treeview.AppendColumn(createColumn("Name", COLUMN_NAME))
+	treeview.AppendColumn(createColumn("Path", COLUMN_PATH))
+	treeview.AppendColumn(createColumn("Size", COLUMN_SIZE))
+	treeview.AppendColumn(createColumn("Modification Time", COLUMN_MODTIME))
 
 	// Creating a list store. This is what holds the data that will be shown on our tree view.
-	liststore, err := gtk.ListStoreNew(glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING)
+	liststore, err := gtk.ListStoreNew(glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING, glib.TYPE_STRING)
 	if err != nil {
 		log.Fatal("Unable to create list store:", err)
 	}
 	liststore.SetSortColumnId(gtk.SORT_COLUMN_UNSORTED, gtk.SORT_DESCENDING)
-	treeView.SetModel(liststore)
-	treeView.SetFixedHeightMode(true)
+	treeview.SetModel(liststore)
+	treeview.SetFixedHeightMode(true)
+	treeview.SetHeadersVisible(true)
+	treeview.SetHeadersClickable(true)
 
-	return treeView, liststore
+	return treeview, liststore
 }
 
 func setupSearchBar() (*gtk.SearchBar, *gtk.SearchEntry) {
@@ -151,8 +156,7 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 	return win
 }
 
-func addEntry(liststore *gtk.ListStore, entry FileEntry) gtk.TreeIter {
-	namestring := path.Join(entry.path, entry.name)
+func addEntry(liststore *gtk.ListStore, entry *FileEntry) gtk.TreeIter {
 	sizestring := fmt.Sprintf("%d", entry.size)
 
 	modtime := entry.modtime
@@ -160,8 +164,8 @@ func addEntry(liststore *gtk.ListStore, entry FileEntry) gtk.TreeIter {
 
 	var iter gtk.TreeIter
 	err := liststore.InsertWithValues(&iter, -1,
-		[]int{COLUMN_FILENAME, COLUMN_SIZE, COLUMN_MODTIME},
-		[]interface{}{namestring, sizestring, modtimestring})
+		[]int{COLUMN_NAME, COLUMN_PATH, COLUMN_SIZE, COLUMN_MODTIME},
+		[]interface{}{entry.name, entry.path, sizestring, modtimestring})
 
 	if err != nil {
 		log.Fatal("Unable to add row:", err)
@@ -170,16 +174,15 @@ func addEntry(liststore *gtk.ListStore, entry FileEntry) gtk.TreeIter {
 	return iter
 }
 
-func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry FileEntry) {
-	namestring := path.Join(entry.path, entry.name)
+func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry) {
 	sizestring := fmt.Sprintf("%d", entry.size)
 
 	modtime := entry.modtime
 	modtimestring := modtime.Format("2006-01-02 15:04:05")
 
 	err := liststore.Set(iter,
-		[]int{COLUMN_FILENAME, COLUMN_SIZE, COLUMN_MODTIME},
-		[]interface{}{namestring, sizestring, modtimestring})
+		[]int{COLUMN_NAME, COLUMN_PATH, COLUMN_SIZE, COLUMN_MODTIME},
+		[]interface{}{entry.name, entry.path, sizestring, modtimestring})
 
 	if err != nil {
 		log.Fatal("Unable to update row:", err)
