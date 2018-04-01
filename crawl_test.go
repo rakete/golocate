@@ -19,8 +19,6 @@ func TestFileEntries(t *testing.T) {
 	log.Println("running TestFileEntries")
 
 	display := DisplayChannel{
-		make(chan int),
-		make(chan int),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
@@ -49,7 +47,7 @@ func TestFileEntries(t *testing.T) {
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
 	wg.Add(1)
-	go Crawl(&wg, cores*2, mem, display, newdirs, finish)
+	go Crawler(&wg, cores*2, mem, display, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
 	}
@@ -77,8 +75,6 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 	b.StopTimer()
 
 	display := DisplayChannel{
-		make(chan int),
-		make(chan int),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
@@ -106,7 +102,7 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go Crawl(&wg, cores, mem, display, newdirs, finish)
+		go Crawler(&wg, cores, mem, display, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
 		}
@@ -124,8 +120,6 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 	b.StopTimer()
 
 	display := DisplayChannel{
-		make(chan int),
-		make(chan int),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
@@ -153,7 +147,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go Crawl(&wg, cores, mem, display, newdirs, finish)
+		go Crawler(&wg, cores, mem, display, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
 		}

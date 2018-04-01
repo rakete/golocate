@@ -250,7 +250,7 @@ func main() {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	display := DisplayChannel{make(chan int), make(chan int), make(chan CrawlResult), make(chan CrawlResult), make(chan CrawlResult)}
+	display := DisplayChannel{make(chan CrawlResult), make(chan CrawlResult), make(chan CrawlResult)}
 	newdirs := make(chan string)
 	finish := make(chan struct{})
 	cores := runtime.NumCPU()
@@ -274,7 +274,7 @@ func main() {
 		sorttype <- SORT_BY_SIZE
 
 		wg.Add(1)
-		go Crawl(&wg, cores, mem, display, newdirs, finish)
+		go Crawler(&wg, cores, mem, display, newdirs, finish)
 		log.Println("starting Crawl on", cores, "cores")
 		for _, dir := range directories {
 			newdirs <- dir

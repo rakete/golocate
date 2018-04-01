@@ -27,8 +27,6 @@ type FilesChannel struct {
 }
 
 type DisplayChannel struct {
-	size      chan int
-	direction chan int
 	byname    chan CrawlResult
 	bymodtime chan CrawlResult
 	bysize    chan CrawlResult
@@ -148,7 +146,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	defer wg.Done()
 }
 
-func Crawl(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChannel, newdirs chan string, finish chan struct{}) {
+func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChannel, newdirs chan string, finish chan struct{}) {
 	collect := FilesChannel{make(chan SortedByName), make(chan SortedByModTime), make(chan SortedBySize)}
 	maxproc := make(chan struct{}, cores)
 	go func() {

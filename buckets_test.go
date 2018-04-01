@@ -18,8 +18,6 @@ func TestBuckets(t *testing.T) {
 	log.Println("running TestBuckets")
 
 	display := DisplayChannel{
-		make(chan int),
-		make(chan int),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
 		make(chan CrawlResult),
@@ -52,7 +50,7 @@ func TestBuckets(t *testing.T) {
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
 	wg.Add(1)
-	go Crawl(&wg, cores*2, mem, display, newdirs, finish)
+	go Crawler(&wg, cores*2, mem, display, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
 	}
