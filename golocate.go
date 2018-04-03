@@ -42,6 +42,21 @@ func createColumn(title string, id SortColumn) *gtk.TreeViewColumn {
 		column.SetSortOrder(DEFAULT_DIRECTION)
 	}
 
+	switch id {
+	case SORT_BY_NAME:
+		column.SetFixedWidth(500)
+		column.SetMinWidth(60)
+	case SORT_BY_PATH:
+		column.SetFixedWidth(800)
+		column.SetMinWidth(60)
+	case SORT_BY_MODTIME:
+		column.SetFixedWidth(200)
+		column.SetMinWidth(60)
+	case SORT_BY_SIZE:
+		column.SetFixedWidth(120)
+		column.SetMinWidth(60)
+	}
+
 	return column
 }
 
