@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gotk3/gotk3/gtk"
+
 	"testing"
 )
 
@@ -59,9 +61,9 @@ func TestBuckets(t *testing.T) {
 	log.Println("Crawl terminated")
 
 	query, _ := regexp.Compile("golocate")
-	byname := mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, query, 1000)
-	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, query, 1000)
-	bysize := mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, query, 1000)
+	byname := mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
+	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
+	bysize := mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
@@ -72,7 +74,7 @@ func TestBuckets(t *testing.T) {
 	//Print(mem.bysize.(*SizeBucket), 0)
 
 	var lastentry *FileEntry
-	WalkEntries(mem.bysize.(*Node), DIRECTION_ASCENDING, func(entry *FileEntry) bool {
+	WalkEntries(mem.bysize.(*Node), gtk.SORT_ASCENDING, func(entry *FileEntry) bool {
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -87,7 +89,7 @@ func TestBuckets(t *testing.T) {
 	})
 
 	lastentry = nil
-	WalkEntries(mem.bysize.(*Node), DIRECTION_DESCENDING, func(entry *FileEntry) bool {
+	WalkEntries(mem.bysize.(*Node), gtk.SORT_DESCENDING, func(entry *FileEntry) bool {
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -101,7 +103,7 @@ func TestBuckets(t *testing.T) {
 		return true
 	})
 
-	WalkNodes(mem.bysize.(*Node), DIRECTION_ASCENDING, func(child Bucket) bool {
+	WalkNodes(mem.bysize.(*Node), gtk.SORT_ASCENDING, func(child Bucket) bool {
 		node := child.Node()
 
 		if !sort.IsSorted(SortedBySize(node.sorted)) {

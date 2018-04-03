@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/gotk3/gotk3/gtk"
+
 	"testing"
 )
 
@@ -56,9 +58,9 @@ func TestFileEntries(t *testing.T) {
 	log.Println("Crawl terminated")
 
 	query, _ := regexp.Compile("golocate")
-	byname := mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, query, 1000)
-	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, query, 1000)
-	bysize := mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, query, 1000)
+	byname := mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
+	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
+	bysize := mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
@@ -110,9 +112,9 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		close(finish)
 
 		query, _ := regexp.Compile(".*")
-		mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, query, 1000)
-		mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, query, 1000)
-		mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, query, 1000)
+		mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
+		mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
+		mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
 	}
 }
 
@@ -155,8 +157,8 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		close(finish)
 
 		query, _ := regexp.Compile(".*")
-		mem.byname.Take(SORT_BY_NAME, DIRECTION_ASCENDING, query, 1000)
-		mem.bymodtime.Take(SORT_BY_MODTIME, DIRECTION_ASCENDING, query, 1000)
-		mem.bysize.Take(SORT_BY_SIZE, DIRECTION_ASCENDING, query, 1000)
+		mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
+		mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
+		mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
 	}
 }
