@@ -220,12 +220,7 @@ func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, 
 func Controller(liststore *gtk.ListStore, display DisplayChannel, sortcolumn chan SortColumn) {
 	var byname, bysize, bymodtime Bucket
 	currentsort := DEFAULT_SORT
-	currentdirections := map[SortColumn]gtk.SortType{
-		SORT_BY_NAME:    DEFAULT_DIRECTION,
-		SORT_BY_PATH:    DEFAULT_DIRECTION,
-		SORT_BY_MODTIME: DEFAULT_DIRECTION,
-		SORT_BY_SIZE:    DEFAULT_DIRECTION,
-	}
+	currentdirection := DEFAULT_DIRECTION
 	var currentquery *regexp.Regexp
 
 	go func() {
@@ -233,14 +228,14 @@ func Controller(liststore *gtk.ListStore, display DisplayChannel, sortcolumn cha
 			select {
 			case newsort := <-sortcolumn:
 				if currentsort == newsort {
-					if currentdirections[currentsort] == OPPOSITE_DIRECTION {
-						currentdirections[currentsort] = DEFAULT_DIRECTION
+					if currentdirection == OPPOSITE_DIRECTION {
+						currentdirection = DEFAULT_DIRECTION
 					} else {
-						currentdirections[currentsort] = OPPOSITE_DIRECTION
+						currentdirection = OPPOSITE_DIRECTION
 					}
 				} else {
 					currentsort = newsort
-					currentdirections[currentsort] = DEFAULT_DIRECTION
+					currentdirection = DEFAULT_DIRECTION
 				}
 			case <-time.After(1 * time.Second):
 			}
@@ -255,7 +250,7 @@ func Controller(liststore *gtk.ListStore, display DisplayChannel, sortcolumn cha
 				currentbucket = bymodtime
 			}
 
-			updateList(currentbucket, liststore, currentsort, currentdirections[currentsort], currentquery, 100)
+			updateList(currentbucket, liststore, currentsort, currentdirection, currentquery, 100)
 		}
 	}()
 
