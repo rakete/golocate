@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	//"fmt"
 	"log"
 	"os"
 	//"path"
@@ -160,7 +160,7 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 }
 
 func addEntry(liststore *gtk.ListStore, entry *FileEntry) gtk.TreeIter {
-	sizestring := fmt.Sprintf("%d", entry.size)
+	sizestring := SizeThreshold(entry.size).String()
 
 	modtime := entry.modtime
 	modtimestring := modtime.Format("2006-01-02 15:04:05")
@@ -178,7 +178,7 @@ func addEntry(liststore *gtk.ListStore, entry *FileEntry) gtk.TreeIter {
 }
 
 func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry) {
-	sizestring := fmt.Sprintf("%d", entry.size)
+	sizestring := SizeThreshold(entry.size).String()
 
 	modtime := entry.modtime
 	modtimestring := modtime.Format("2006-01-02 15:04:05")
