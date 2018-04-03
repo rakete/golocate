@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/gotk3/gotk3/gtk"
 )
 
 type Threshold interface {
@@ -151,12 +153,12 @@ func (node *Node) Merge(sorttype int, files []*FileEntry) {
 	Insert(sorttype, node, 0, files)
 }
 
-func (node *Node) Take(sorttype, direction int, query *regexp.Regexp, n int) []*FileEntry {
+func (node *Node) Take(sorttype int, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
 	var indexfunc func(int, int) int
 	switch direction {
-	case DIRECTION_ASCENDING:
+	case gtk.SORT_ASCENDING:
 		indexfunc = func(l, i int) int { return i }
-	case DIRECTION_DESCENDING:
+	case gtk.SORT_DESCENDING:
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
@@ -262,14 +264,14 @@ func (node *Node) Node() *Node {
 	return node
 }
 
-func WalkEntries(bucket Bucket, direction int, f func(entry *FileEntry) bool) bool {
+func WalkEntries(bucket Bucket, direction gtk.SortType, f func(entry *FileEntry) bool) bool {
 	node := bucket.Node()
 
 	var indexfunc func(int, int) int
 	switch direction {
-	case DIRECTION_ASCENDING:
+	case gtk.SORT_ASCENDING:
 		indexfunc = func(l, i int) int { return i }
-	case DIRECTION_DESCENDING:
+	case gtk.SORT_DESCENDING:
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
@@ -293,14 +295,14 @@ func WalkEntries(bucket Bucket, direction int, f func(entry *FileEntry) bool) bo
 	return true
 }
 
-func WalkNodes(bucket Bucket, direction int, f func(bucket Bucket) bool) bool {
+func WalkNodes(bucket Bucket, direction gtk.SortType, f func(bucket Bucket) bool) bool {
 	node := bucket.Node()
 
 	var indexfunc func(int, int) int
 	switch direction {
-	case DIRECTION_ASCENDING:
+	case gtk.SORT_ASCENDING:
 		indexfunc = func(l, i int) int { return i }
-	case DIRECTION_DESCENDING:
+	case gtk.SORT_DESCENDING:
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 

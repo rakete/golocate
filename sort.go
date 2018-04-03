@@ -6,6 +6,7 @@ import (
 
 const (
 	SORT_BY_NAME = iota
+	SORT_BY_PATH
 	SORT_BY_MODTIME
 	SORT_BY_SIZE
 )

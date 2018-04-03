@@ -11,6 +11,8 @@ import (
 	"time"
 	//"gotk3/gtk"
 	//"fmt"
+
+	"github.com/gotk3/gotk3/gtk"
 )
 
 type FileEntry struct {
@@ -38,14 +40,9 @@ type ResultMemory struct {
 	bysize    CrawlResult
 }
 
-const (
-	DIRECTION_ASCENDING = iota
-	DIRECTION_DESCENDING
-)
-
 type CrawlResult interface {
 	Merge(sorttype int, files []*FileEntry)
-	Take(sorttype, direction int, query *regexp.Regexp, n int) []*FileEntry
+	Take(sorttype int, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry
 	NumFiles() int
 }
 
@@ -55,12 +52,12 @@ func (entries *FileEntries) Merge(_ int, files []*FileEntry) {
 	*entries = append(*entries, files...)
 }
 
-func (entries *FileEntries) Take(sorttype, direction int, query *regexp.Regexp, n int) []*FileEntry {
+func (entries *FileEntries) Take(sorttype int, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
 	var indexfunc func(int, int) int
 	switch direction {
-	case DIRECTION_ASCENDING:
+	case gtk.SORT_ASCENDING:
 		indexfunc = func(l, i int) int { return i }
-	case DIRECTION_DESCENDING:
+	case gtk.SORT_DESCENDING:
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
