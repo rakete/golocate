@@ -34,7 +34,7 @@ type SortedBySize FileEntries
 func (a SortedBySize) Len() int      { return len(a) }
 func (a SortedBySize) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a SortedBySize) Less(i, j int) bool {
-	return a[i].size < a[j].size
+	return a[i].size > a[j].size
 }
 
 func sortFileEntries(files sort.Interface) sort.Interface {

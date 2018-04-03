@@ -36,20 +36,20 @@ func (a ModTimeThreshold) String() string {
 }
 
 func (a SizeThreshold) Less(b Threshold) bool {
-	return a < b.(SizeThreshold)
+	return a > b.(SizeThreshold)
 }
 
 func (a SizeThreshold) String() string {
 	if a >= (1000 * 1000 * 1000 * 1000 * 1000) {
-		return fmt.Sprintf("%.3fPb", float64(a)/(1000*1000*1000*1000*1000))
+		return fmt.Sprintf("%.3fP", float64(a)/(1000*1000*1000*1000*1000))
 	} else if a >= (1000 * 1000 * 1000 * 1000) {
-		return fmt.Sprintf("%.3fTb", float64(a)/(1000*1000*1000*1000))
+		return fmt.Sprintf("%.3fT", float64(a)/(1000*1000*1000*1000))
 	} else if a >= (1000 * 1000 * 1000) {
-		return fmt.Sprintf("%.3fGb", float64(a)/(1000*1000*1000))
+		return fmt.Sprintf("%.3fG", float64(a)/(1000*1000*1000))
 	} else if a >= (1000 * 1000) {
-		return fmt.Sprintf("%.3fMb", float64(a)/(1000*1000))
+		return fmt.Sprintf("%.3fM", float64(a)/(1000*1000))
 	} else if a >= 1000 {
-		return fmt.Sprintf("%.3fKb", float64(a)/1000)
+		return fmt.Sprintf("%.3fK", float64(a)/1000)
 	} else {
 		return fmt.Sprintf("%db", a)
 	}
@@ -130,19 +130,19 @@ func NewModTimeBucket() *Node {
 func NewSizeBucket() *Node {
 	bucket := new(Node)
 
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000)})
-	// <4096 and <4097 are very popular file sizes
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(4096)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(4097)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10000000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100000000)})
 	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000000000)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100000000)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10000000)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000000)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100000)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10000)})
+	// <4096 and <4097 are very popular file sizes
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(4097)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(4096)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10)})
+	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1)})
 
 	bucket.children = append(bucket.children, &Node{threshold: nil})
 
