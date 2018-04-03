@@ -18,16 +18,16 @@ import (
 const (
 	DEFAULT_DIRECTION  gtk.SortType = gtk.SORT_ASCENDING
 	OPPOSITE_DIRECTION gtk.SortType = gtk.SORT_DESCENDING
-	DEFAULT_SORT       int          = SORT_BY_MODTIME
+	DEFAULT_SORT       SortColumn   = SORT_BY_MODTIME
 )
 
-func createColumn(title string, id int) *gtk.TreeViewColumn {
+func createColumn(title string, id SortColumn) *gtk.TreeViewColumn {
 	cellrenderer, err := gtk.CellRendererTextNew()
 	if err != nil {
 		log.Fatal("Unable to create text cell renderer:", err)
 	}
 
-	column, err := gtk.TreeViewColumnNewWithAttribute(title, cellrenderer, "text", id)
+	column, err := gtk.TreeViewColumnNewWithAttribute(title, cellrenderer, "text", int(id))
 	if err != nil {
 		log.Fatal("Unable to create cell column:", err)
 	}
@@ -167,7 +167,7 @@ func addEntry(liststore *gtk.ListStore, entry *FileEntry) gtk.TreeIter {
 
 	var iter gtk.TreeIter
 	err := liststore.InsertWithValues(&iter, -1,
-		[]int{SORT_BY_NAME, SORT_BY_PATH, SORT_BY_SIZE, SORT_BY_MODTIME},
+		[]int{int(SORT_BY_NAME), int(SORT_BY_PATH), int(SORT_BY_SIZE), int(SORT_BY_MODTIME)},
 		[]interface{}{entry.name, entry.path, sizestring, modtimestring})
 
 	if err != nil {
@@ -184,7 +184,7 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	modtimestring := modtime.Format("2006-01-02 15:04:05")
 
 	err := liststore.Set(iter,
-		[]int{SORT_BY_NAME, SORT_BY_PATH, SORT_BY_SIZE, SORT_BY_MODTIME},
+		[]int{int(SORT_BY_NAME), int(SORT_BY_PATH), int(SORT_BY_SIZE), int(SORT_BY_MODTIME)},
 		[]interface{}{entry.name, entry.path, sizestring, modtimestring})
 
 	if err != nil {
@@ -192,13 +192,13 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	}
 }
 
-func updateList(bucket Bucket, liststore *gtk.ListStore, sorttype int, direction gtk.SortType, query *regexp.Regexp, n int) {
+func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) {
 	if bucket == nil {
 		return
 	}
 
 	var entries []*FileEntry
-	entries = bucket.Node().Take(sorttype, direction, query, n)
+	entries = bucket.Node().Take(sortcolumn, direction, query, n)
 
 	glib.IdleAdd(func() {
 		i := 0
@@ -217,10 +217,10 @@ func updateList(bucket Bucket, liststore *gtk.ListStore, sorttype int, direction
 	})
 }
 
-func Controller(liststore *gtk.ListStore, display DisplayChannel, sorttype chan int) {
+func Controller(liststore *gtk.ListStore, display DisplayChannel, sortcolumn chan SortColumn) {
 	var byname, bysize, bymodtime Bucket
 	currentsort := DEFAULT_SORT
-	currentdirections := map[int]gtk.SortType{
+	currentdirections := map[SortColumn]gtk.SortType{
 		SORT_BY_NAME:    DEFAULT_DIRECTION,
 		SORT_BY_PATH:    DEFAULT_DIRECTION,
 		SORT_BY_MODTIME: DEFAULT_DIRECTION,
@@ -231,7 +231,7 @@ func Controller(liststore *gtk.ListStore, display DisplayChannel, sorttype chan 
 	go func() {
 		for {
 			select {
-			case newsort := <-sorttype:
+			case newsort := <-sortcolumn:
 				if currentsort == newsort {
 					if currentdirections[currentsort] == OPPOSITE_DIRECTION {
 						currentdirections[currentsort] = DEFAULT_DIRECTION
@@ -271,9 +271,9 @@ func Controller(liststore *gtk.ListStore, display DisplayChannel, sorttype chan 
 	}
 }
 
-func createColumnSortToggle(treeview *gtk.TreeView, clickedcolumn int, sorttypechan chan int, sorttype int) func() {
+func createColumnSortToggle(treeview *gtk.TreeView, clickedcolumn int, sortcolumnchan chan SortColumn, sortcolumn SortColumn) func() {
 	return func() {
-		sorttypechan <- sorttype
+		sortcolumnchan <- sortcolumn
 
 		for i := 0; i < int(treeview.GetNColumns()); i++ {
 			column := treeview.GetColumn(i)
@@ -325,25 +325,25 @@ func main() {
 	var treeview *gtk.TreeView
 	var searchbar *gtk.SearchBar
 	var searchentry *gtk.SearchEntry
-	sorttypechan := make(chan int)
+	sortcolumnchan := make(chan SortColumn)
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
 		treeview, liststore = setupTreeView()
 		searchbar, searchentry = setupSearchBar()
 
-		go Controller(liststore, display, sorttypechan)
+		go Controller(liststore, display, sortcolumnchan)
 
 		for i := 0; i < int(treeview.GetNColumns()); i++ {
 			column := treeview.GetColumn(i)
 			title := column.GetTitle()
 			switch title {
 			case "Name":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, sorttypechan, SORT_BY_NAME))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, sortcolumnchan, SORT_BY_NAME))
 			case "Size":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, sorttypechan, SORT_BY_SIZE))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, sortcolumnchan, SORT_BY_SIZE))
 			case "Modification Time":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, sorttypechan, SORT_BY_MODTIME))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, sortcolumnchan, SORT_BY_MODTIME))
 			default:
 				column.Connect("clicked", func() {
 					log.Println("can not sort by", title)

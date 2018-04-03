@@ -65,7 +65,7 @@ type Node struct {
 
 type Bucket interface {
 	Less(entry *FileEntry) bool
-	Sort(sorttype int)
+	Sort(sortcolumn SortColumn)
 	AddBranch(threshold Threshold, entries []*FileEntry)
 	ThresholdSplit(i int) Threshold
 	Node() *Node
@@ -149,11 +149,11 @@ func NewSizeBucket() *Node {
 	return bucket
 }
 
-func (node *Node) Merge(sorttype int, files []*FileEntry) {
-	Insert(sorttype, node, 0, files)
+func (node *Node) Merge(sortcolumn SortColumn, files []*FileEntry) {
+	Insert(sortcolumn, node, 0, files)
 }
 
-func (node *Node) Take(sorttype int, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
+func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -169,7 +169,7 @@ func (node *Node) Take(sorttype int, direction gtk.SortType, query *regexp.Regex
 		defer childnode.mutex.Unlock()
 		childnode.mutex.Lock()
 
-		child.Sort(sorttype)
+		child.Sort(sortcolumn)
 
 		sorted := childnode.sorted
 		l := len(sorted)
@@ -215,9 +215,9 @@ func (node *Node) Less(entry *FileEntry) bool {
 	return true
 }
 
-func (node *Node) Sort(sorttype int) {
+func (node *Node) Sort(sortcolumn SortColumn) {
 	if len(node.queue) > 0 {
-		switch sorttype {
+		switch sortcolumn {
 		case SORT_BY_NAME:
 			node.queue = sortFileEntries(SortedByName(node.queue)).(SortedByName)
 		case SORT_BY_MODTIME:
@@ -225,12 +225,12 @@ func (node *Node) Sort(sorttype int) {
 		case SORT_BY_SIZE:
 			node.queue = sortFileEntries(SortedBySize(node.queue)).(SortedBySize)
 		}
-		node.sorted = sortMerge(sorttype, node.sorted, node.queue)
+		node.sorted = sortMerge(sortcolumn, node.sorted, node.queue)
 		node.queue = nil
 	}
 
 	for _, child := range node.children {
-		child.Sort(sorttype)
+		child.Sort(sortcolumn)
 	}
 }
 
@@ -349,7 +349,7 @@ func Print(bucket Bucket, level int) {
 	}
 }
 
-func Insert(sorttype int, bucket Bucket, first int, files []*FileEntry) int {
+func Insert(sortcolumn SortColumn, bucket Bucket, first int, files []*FileEntry) int {
 	node := bucket.Node()
 
 	i := first
@@ -359,7 +359,7 @@ func Insert(sorttype int, bucket Bucket, first int, files []*FileEntry) int {
 		for i < len(files) && child.Less(files[i]) {
 			if len(childnode.children) > 0 {
 				childnode.mutex.Unlock()
-				i = Insert(sorttype, child, i, files)
+				i = Insert(sortcolumn, child, i, files)
 				childnode.mutex.Lock()
 			} else {
 				childnode.queue = append(childnode.queue, files[i])
@@ -368,7 +368,7 @@ func Insert(sorttype int, bucket Bucket, first int, files []*FileEntry) int {
 		}
 
 		if len(childnode.queue) >= 100000 {
-			Split(sorttype, child, 10)
+			Split(sortcolumn, child, 10)
 		}
 		childnode.mutex.Unlock()
 
@@ -380,7 +380,7 @@ func Insert(sorttype int, bucket Bucket, first int, files []*FileEntry) int {
 	return i
 }
 
-func Split(sorttype int, bucket Bucket, numparts int) {
+func Split(sortcolumn SortColumn, bucket Bucket, numparts int) {
 	// - we want to split this node.sorted slice into numparts parts and create a childnode
 	// in node.children for each of them
 	node := bucket.Node()
@@ -401,7 +401,7 @@ func Split(sorttype int, bucket Bucket, numparts int) {
 
 	// - sorted is already sorted, but queue is just appended to, so we sort queue and then merge
 	// sorted and queue, afterwards we can discard the queue
-	bucket.Sort(sorttype)
+	bucket.Sort(sortcolumn)
 
 	// - below is an algorithm that tries to split the sorted slice into roughly uniform parts,
 	// the general idea is that we can use the entries in the slice itself as new thresholds for

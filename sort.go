@@ -4,8 +4,10 @@ import (
 	"sort"
 )
 
+type SortColumn int
+
 const (
-	SORT_BY_NAME = iota
+	SORT_BY_NAME SortColumn = iota
 	SORT_BY_PATH
 	SORT_BY_MODTIME
 	SORT_BY_SIZE
@@ -40,7 +42,7 @@ func sortFileEntries(files sort.Interface) sort.Interface {
 	return files
 }
 
-func sortMerge(sorttype int, left, right []*FileEntry) []*FileEntry {
+func sortMerge(sortcolumn SortColumn, left, right []*FileEntry) []*FileEntry {
 	if len(left) == 0 {
 		return right
 	}
@@ -51,7 +53,7 @@ func sortMerge(sorttype int, left, right []*FileEntry) []*FileEntry {
 
 	// BEGIN VERSION 0
 	// left = append(left, right...)
-	// switch sorttype {
+	// switch sortcolumn {
 	// case SORT_BY_NAME:
 	// 	sort.Stable(SortedByName(left))
 	// case SORT_BY_MODTIME:
@@ -69,7 +71,7 @@ func sortMerge(sorttype int, left, right []*FileEntry) []*FileEntry {
 	testRightBeforeLeft, testLeftBeforeRight := false, false
 	xs := []*FileEntry{right[len(right)-1], left[0]}
 	ys := []*FileEntry{left[len(left)-1], right[0]}
-	switch sorttype {
+	switch sortcolumn {
 	case SORT_BY_NAME:
 		testRightBeforeLeft = SortedByName(xs).Less(0, 1)
 		testLeftBeforeRight = SortedByName(ys).Less(0, 1)
@@ -96,7 +98,7 @@ func sortMerge(sorttype int, left, right []*FileEntry) []*FileEntry {
 		// by building the merged slice in result by appending elements from queue to result, queue
 		// is only used to compare elements with the sort.Interface Less function
 		var queue sort.Interface
-		switch sorttype {
+		switch sortcolumn {
 		case SORT_BY_NAME:
 			queue = SortedByName(append(left, right...))
 		case SORT_BY_MODTIME:

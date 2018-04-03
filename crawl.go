@@ -41,18 +41,18 @@ type ResultMemory struct {
 }
 
 type CrawlResult interface {
-	Merge(sorttype int, files []*FileEntry)
-	Take(sorttype int, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry
+	Merge(sortcolumn SortColumn, files []*FileEntry)
+	Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry
 	NumFiles() int
 }
 
 type FileEntries []*FileEntry
 
-func (entries *FileEntries) Merge(_ int, files []*FileEntry) {
+func (entries *FileEntries) Merge(_ SortColumn, files []*FileEntry) {
 	*entries = append(*entries, files...)
 }
 
-func (entries *FileEntries) Take(sorttype int, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
+func (entries *FileEntries) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -62,7 +62,7 @@ func (entries *FileEntries) Take(sorttype int, direction gtk.SortType, query *re
 	}
 
 	var sorted FileEntries
-	switch sorttype {
+	switch sortcolumn {
 	case SORT_BY_NAME:
 		sorted = FileEntries(sortFileEntries(SortedByName(*entries)).(SortedByName))
 	case SORT_BY_MODTIME:
