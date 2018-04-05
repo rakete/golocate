@@ -56,11 +56,12 @@ func (a SizeThreshold) String() string {
 }
 
 type Node struct {
-	threshold Threshold
-	mutex     sync.Mutex
-	queue     []*FileEntry
-	sorted    []*FileEntry
-	children  []Bucket
+	threshold  Threshold
+	mutex      sync.Mutex
+	lastchange time.Time
+	queue      []*FileEntry
+	sorted     []*FileEntry
+	children   []Bucket
 }
 
 type Bucket interface {
@@ -153,7 +154,7 @@ func (node *Node) Merge(sortcolumn SortColumn, files []*FileEntry) {
 	Insert(sortcolumn, node, 0, files)
 }
 
-func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
+func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) ([]*FileEntry, []Bucket) {
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -163,6 +164,7 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 	}
 
 	var result []*FileEntry
+	var nodes []Bucket
 	WalkNodes(node, direction, func(child Bucket) bool {
 		childnode := child.Node()
 
@@ -173,6 +175,11 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 
 		sorted := childnode.sorted
 		l := len(sorted)
+
+		if l > 0 {
+			nodes = append(nodes, childnode)
+		}
+
 		for i := 0; i < len(sorted); i++ {
 			index := indexfunc(l, i)
 			if query == nil || query.MatchString(sorted[index].path) || query.MatchString(sorted[index].name) {
@@ -187,7 +194,7 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 		return true
 	})
 
-	return result
+	return result, nodes
 }
 
 func (node *Node) NumFiles() int {

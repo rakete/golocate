@@ -28,12 +28,6 @@ type FilesChannel struct {
 	bysize    chan SortedBySize
 }
 
-type DisplayChannel struct {
-	byname    chan CrawlResult
-	bymodtime chan CrawlResult
-	bysize    chan CrawlResult
-}
-
 type ResultMemory struct {
 	byname    CrawlResult
 	bymodtime CrawlResult
@@ -42,7 +36,7 @@ type ResultMemory struct {
 
 type CrawlResult interface {
 	Merge(sortcolumn SortColumn, files []*FileEntry)
-	Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry
+	Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) ([]*FileEntry, []Bucket)
 	NumFiles() int
 }
 
@@ -52,7 +46,7 @@ func (entries *FileEntries) Merge(_ SortColumn, files []*FileEntry) {
 	*entries = append(*entries, files...)
 }
 
-func (entries *FileEntries) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
+func (entries *FileEntries) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) ([]*FileEntry, []Bucket) {
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -88,7 +82,7 @@ func (entries *FileEntries) Take(sortcolumn SortColumn, direction gtk.SortType, 
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 func (entries *FileEntries) NumFiles() int { return len(*entries) }
@@ -143,7 +137,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	defer wg.Done()
 }
 
-func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayChannel, newdirs chan string, finish chan struct{}) {
+func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan string, finish chan struct{}) {
 	collect := FilesChannel{make(chan SortedByName), make(chan SortedByModTime), make(chan SortedBySize)}
 	maxproc := make(chan struct{}, cores)
 	go func() {
@@ -170,7 +164,6 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayCha
 				newbyname = sortFileEntries(SortedByName(newbyname)).(SortedByName)
 				mem.byname.Merge(SORT_BY_NAME, newbyname)
 
-				display.byname <- mem.byname
 				wg.Done()
 			case <-finish:
 				return
@@ -188,7 +181,6 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayCha
 				newbymodtime = sortFileEntries(SortedByModTime(newbymodtime)).(SortedByModTime)
 				mem.bymodtime.Merge(SORT_BY_MODTIME, newbymodtime)
 
-				display.bymodtime <- mem.bymodtime
 				wg.Done()
 			case <-finish:
 				return
@@ -206,7 +198,6 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, display DisplayCha
 				newbysize = sortFileEntries(SortedBySize(newbysize)).(SortedBySize)
 				mem.bysize.Merge(SORT_BY_SIZE, newbysize)
 
-				display.bysize <- mem.bysize
 				wg.Done()
 			case <-finish:
 				return

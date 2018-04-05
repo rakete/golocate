@@ -110,8 +110,8 @@ func setupSearchBar() (*gtk.SearchBar, *gtk.SearchEntry) {
 	return searchbar, searchentry
 }
 
-func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar *gtk.SearchBar, title string) *gtk.ApplicationWindow {
-	win, err := gtk.ApplicationWindowNew(application)
+func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar *gtk.SearchBar, title string) (*gtk.ApplicationWindow, *gtk.ScrolledWindow) {
+	appwin, err := gtk.ApplicationWindowNew(application)
 	if err != nil {
 		log.Fatal("Unable to create window:", err)
 	}
@@ -149,29 +149,29 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 	mbtn.SetMenuModel(&menu.MenuModel)
 	header.PackStart(mbtn)
 
-	win.SetTitle(title)
-	win.SetTitlebar(header)
-	win.SetPosition(gtk.WIN_POS_MOUSE)
-	win.SetPosition(gtk.WIN_POS_CENTER)
-	win.SetDefaultSize(1700, 1000)
+	appwin.SetTitle(title)
+	appwin.SetTitlebar(header)
+	appwin.SetPosition(gtk.WIN_POS_MOUSE)
+	appwin.SetPosition(gtk.WIN_POS_CENTER)
+	appwin.SetDefaultSize(1700, 1000)
 
 	verticalbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
 	if err != nil {
 		log.Fatal("Unable to create box:", err)
 	}
 
-	scrolledwindow, err := gtk.ScrolledWindowNew(nil, nil)
+	scrollwin, err := gtk.ScrolledWindowNew(nil, nil)
 	if err != nil {
 		log.Fatal("unable to create scrolled window:", err)
 	}
 
-	win.Add(verticalbox)
+	appwin.Add(verticalbox)
 	verticalbox.PackStart(searchbar, false, false, 0)
-	scrolledwindow.Add(treeview)
-	verticalbox.PackStart(scrolledwindow, true, true, 5)
-	win.ShowAll()
+	scrollwin.Add(treeview)
+	verticalbox.PackStart(scrollwin, true, true, 5)
+	appwin.ShowAll()
 
-	return win
+	return appwin, scrollwin
 }
 
 func addEntry(liststore *gtk.ListStore, entry *FileEntry) gtk.TreeIter {
@@ -213,10 +213,12 @@ func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, 
 	}
 
 	var entries []*FileEntry
-	entries = bucket.Node().Take(sortcolumn, direction, query, n)
+	entries, _ = bucket.Node().Take(sortcolumn, direction, query, n)
 
+	i := 0
+	var wg sync.WaitGroup
+	wg.Add(1)
 	glib.IdleAdd(func() {
-		i := 0
 		iter, valid := liststore.GetIterFirst()
 		for i < len(entries) && valid == true {
 			updateEntry(iter, liststore, entries[i])
@@ -224,60 +226,60 @@ func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, 
 			i += 1
 		}
 		if i < len(entries) {
-			for _, entry := range entries {
+			for _, entry := range entries[i:] {
 				addEntry(liststore, entry)
 				i += 1
 			}
 		}
+		wg.Done()
 	})
+	wg.Wait()
 }
 
-func Controller(liststore *gtk.ListStore, display DisplayChannel, sortcolumn chan SortColumn) {
-	var byname, bysize, bymodtime Bucket
+type View struct {
+	sort  chan SortColumn
+	more  chan struct{}
+	reset chan struct{}
+}
+
+func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 	currentsort := DEFAULT_SORT
 	currentdirection := DEFAULT_DIRECTION
 	var currentquery *regexp.Regexp
-
-	go func() {
-		for {
-			select {
-			case newsort := <-sortcolumn:
-				if currentsort == newsort {
-					if currentdirection == OPPOSITE_DIRECTION {
-						currentdirection = DEFAULT_DIRECTION
-					} else {
-						currentdirection = OPPOSITE_DIRECTION
-					}
-				} else {
-					currentsort = newsort
-					currentdirection = DEFAULT_DIRECTION
-				}
-			case <-time.After(1 * time.Second):
-			}
-
-			var currentbucket Bucket
-			switch currentsort {
-			case SORT_BY_NAME:
-				currentbucket = byname
-			case SORT_BY_SIZE:
-				currentbucket = bysize
-			case SORT_BY_MODTIME:
-				currentbucket = bymodtime
-			}
-
-			updateList(currentbucket, liststore, currentsort, currentdirection, currentquery, 100)
-		}
-	}()
+	inc := 200
+	n := inc
 
 	for {
 		select {
-		case bucket := <-display.byname:
-			byname = bucket.(*Node)
-		case bucket := <-display.bymodtime:
-			bymodtime = bucket.(*Node)
-		case bucket := <-display.bysize:
-			bysize = bucket.(*Node)
+		case <-view.more:
+			n += inc
+		case <-view.reset:
+			n = inc
+		case newsort := <-view.sort:
+			if currentsort == newsort {
+				if currentdirection == OPPOSITE_DIRECTION {
+					currentdirection = DEFAULT_DIRECTION
+				} else {
+					currentdirection = OPPOSITE_DIRECTION
+				}
+			} else {
+				currentsort = newsort
+				currentdirection = DEFAULT_DIRECTION
+			}
+		case <-time.After(1 * time.Second):
 		}
+
+		var currentbucket Bucket
+		switch currentsort {
+		case SORT_BY_NAME:
+			currentbucket = mem.byname.(*Node)
+		case SORT_BY_SIZE:
+			currentbucket = mem.bysize.(*Node)
+		case SORT_BY_MODTIME:
+			currentbucket = mem.bymodtime.(*Node)
+		}
+
+		updateList(currentbucket, liststore, currentsort, currentdirection, currentquery, n)
 	}
 }
 
@@ -326,7 +328,6 @@ func main() {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	display := DisplayChannel{make(chan CrawlResult), make(chan CrawlResult), make(chan CrawlResult)}
 	newdirs := make(chan string)
 	finish := make(chan struct{})
 	cores := runtime.NumCPU()
@@ -335,25 +336,25 @@ func main() {
 	var treeview *gtk.TreeView
 	var searchbar *gtk.SearchBar
 	var searchentry *gtk.SearchEntry
-	sortcolumnchan := make(chan SortColumn)
+	view := View{make(chan SortColumn), make(chan struct{}), make(chan struct{})}
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
 		treeview, liststore = setupTreeView()
 		searchbar, searchentry = setupSearchBar()
 
-		go Controller(liststore, display, sortcolumnchan)
+		go Controller(liststore, mem, view)
 
 		for i := 0; i < int(treeview.GetNColumns()); i++ {
 			column := treeview.GetColumn(i)
 			title := column.GetTitle()
 			switch title {
 			case "Name":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, sortcolumnchan, SORT_BY_NAME))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_NAME))
 			case "Size":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, sortcolumnchan, SORT_BY_SIZE))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_SIZE))
 			case "Modification Time":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, sortcolumnchan, SORT_BY_MODTIME))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_MODTIME))
 			default:
 				column.Connect("clicked", func() {
 					log.Println("can not sort by", title)
@@ -366,15 +367,41 @@ func main() {
 		})
 
 		wg.Add(1)
-		go Crawler(&wg, cores, mem, display, newdirs, finish)
+		go Crawler(&wg, cores, mem, newdirs, finish)
 		log.Println("starting Crawl on", cores, "cores")
 		for _, dir := range directories {
 			newdirs <- dir
 		}
 
-		win := setupWindow(application, treeview, searchbar, "golocate")
-		win.Window.Connect("key-press-event", func(win *gtk.ApplicationWindow, ev *gdk.Event) {
+		appwin, scrollwin := setupWindow(application, treeview, searchbar, "golocate")
+		appwin.Window.Connect("key-press-event", func(win *gtk.ApplicationWindow, ev *gdk.Event) {
 			searchbar.HandleEvent(ev)
+		})
+
+		lastupper := -1.0
+		adjustment := scrollwin.GetVAdjustment()
+		// adjustment.Connect("value-changed", func() {
+		// 	upper := adjustment.GetUpper()
+		// 	if upper < lastupper {
+		// 		lastupper = -1.0
+		// 		view.reset <- struct{}{}
+		// 	}
+		// 	if upper > lastupper && (adjustment.GetValue()+adjustment.GetPageSize()) > (adjustment.GetUpper()/4)*3 {
+		// 		lastupper = upper
+		// 		view.more <- struct{}{}
+		// 	}
+		// })
+
+		scrollwin.Connect("edge-reached", func(win *gtk.ScrolledWindow, pos gtk.PositionType) {
+			upper := adjustment.GetUpper()
+			if upper < lastupper {
+				lastupper = -1.0
+				view.reset <- struct{}{}
+			}
+			if upper > lastupper && (adjustment.GetValue()+adjustment.GetPageSize()) > (adjustment.GetUpper()/4)*3 {
+				lastupper = upper
+				view.more <- struct{}{}
+			}
 		})
 
 		aCrawl := glib.SimpleActionNew("crawl", nil)
