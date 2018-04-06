@@ -207,24 +207,31 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	}
 }
 
-func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) {
+func updateList(wg *sync.WaitGroup, bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) {
 	if bucket == nil {
 		return
 	}
 
 	var entries []*FileEntry
-	entries, _ = bucket.Node().Take(sortcolumn, direction, query, n)
+	entries = bucket.Node().Take(sortcolumn, direction, query, n)
+	if len(entries) > 0 {
+		log.Println("displaying", len(entries), "entries")
+	}
 
-	i := 0
-	var wg sync.WaitGroup
 	wg.Add(1)
 	glib.IdleAdd(func() {
+		if len(entries) < n {
+			liststore.Clear()
+		}
+
+		i := 0
 		iter, valid := liststore.GetIterFirst()
 		for i < len(entries) && valid == true {
 			updateEntry(iter, liststore, entries[i])
 			valid = liststore.IterNext(iter)
 			i += 1
 		}
+
 		if i < len(entries) {
 			for _, entry := range entries[i:] {
 				addEntry(liststore, entry)
@@ -233,28 +240,39 @@ func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, 
 		}
 		wg.Done()
 	})
-	wg.Wait()
 }
 
 type View struct {
-	sort  chan SortColumn
-	more  chan struct{}
-	reset chan struct{}
+	sort       chan SortColumn
+	more       chan struct{}
+	reset      chan struct{}
+	searchterm chan string
 }
 
 func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 	currentsort := DEFAULT_SORT
 	currentdirection := DEFAULT_DIRECTION
 	var currentquery *regexp.Regexp
-	inc := 200
+	lastpoll := time.Unix(0, 0)
+	inc := 1000
 	n := inc
 
 	for {
 		select {
 		case <-view.more:
 			n += inc
+			lastpoll = time.Unix(0, 0)
 		case <-view.reset:
 			n = inc
+			lastpoll = time.Unix(0, 0)
+		case searchterm := <-view.searchterm:
+			var err error
+			currentquery, err = regexp.Compile(searchterm)
+			if err != nil {
+				log.Println(searchterm, err)
+				currentquery = nil
+			}
+			lastpoll = time.Unix(0, 0)
 		case newsort := <-view.sort:
 			if currentsort == newsort {
 				if currentdirection == OPPOSITE_DIRECTION {
@@ -266,6 +284,7 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 				currentsort = newsort
 				currentdirection = DEFAULT_DIRECTION
 			}
+			lastpoll = time.Unix(0, 0)
 		case <-time.After(1 * time.Second):
 		}
 
@@ -279,7 +298,12 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 			currentbucket = mem.bymodtime.(*Node)
 		}
 
-		updateList(currentbucket, liststore, currentsort, currentdirection, currentquery, n)
+		if currentbucket.Node().lastchange.After(lastpoll) {
+			var wg sync.WaitGroup
+			go updateList(&wg, currentbucket, liststore, currentsort, currentdirection, currentquery, n)
+			wg.Wait()
+			lastpoll = time.Now()
+		}
 	}
 }
 
@@ -336,7 +360,7 @@ func main() {
 	var treeview *gtk.TreeView
 	var searchbar *gtk.SearchBar
 	var searchentry *gtk.SearchEntry
-	view := View{make(chan SortColumn), make(chan struct{}), make(chan struct{})}
+	view := View{make(chan SortColumn), make(chan struct{}), make(chan struct{}), make(chan string)}
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
@@ -362,8 +386,14 @@ func main() {
 			}
 		}
 
-		searchentry.Connect("search-changed", func() {
-			log.Println("ping")
+		searchentry.Connect("search-changed", func(search *gtk.SearchEntry) {
+			buffer, err := search.GetBuffer()
+			if err == nil {
+				text, err := buffer.GetText()
+				if err == nil {
+					view.searchterm <- text
+				}
+			}
 		})
 
 		wg.Add(1)

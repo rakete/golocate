@@ -76,10 +76,14 @@ func NewNameBucket() *Node {
 	bucket := new(Node)
 
 	for _, char := range "9abcdefghijklmnopqrstuvwxyz" {
-		bucket.children = append(bucket.children, &Node{threshold: NameThreshold(char)})
+		bucket.children = append(bucket.children, &Node{
+			threshold: NameThreshold(char),
+		})
 	}
 
-	bucket.children = append(bucket.children, &Node{threshold: nil})
+	bucket.children = append(bucket.children, &Node{
+		threshold: nil,
+	})
 
 	return bucket
 }
@@ -96,34 +100,62 @@ func NewModTimeBucket() *Node {
 	year := week * 52
 	decade := year * 10
 
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now)})
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-second * 10))})
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-minute))})
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-minute * 10))})
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-minute * 20))})
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-minute * 30))})
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-minute * 40))})
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-minute * 50))})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-second * 10)),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-minute)),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-minute * 10)),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-minute * 20)),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-minute * 30)),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-minute * 40)),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-minute * 50)),
+	})
 
 	for i := 1; i < 24; i++ {
-		bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-hour * time.Duration(i)))})
+		bucket.children = append(bucket.children, &Node{
+			threshold: ModTimeThreshold(now.Add(-hour * time.Duration(i))),
+		})
 	}
 
 	for i := 1; i < 7; i++ {
-		bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-day * time.Duration(i)))})
+		bucket.children = append(bucket.children, &Node{
+			threshold: ModTimeThreshold(now.Add(-day * time.Duration(i))),
+		})
 	}
 
 	for i := 1; i < 52; i++ {
-		bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-week * time.Duration(i)))})
+		bucket.children = append(bucket.children, &Node{
+			threshold: ModTimeThreshold(now.Add(-week * time.Duration(i))),
+		})
 	}
 
 	for i := 1; i < 10; i++ {
-		bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-year * time.Duration(i)))})
+		bucket.children = append(bucket.children, &Node{
+			threshold: ModTimeThreshold(now.Add(-year * time.Duration(i))),
+		})
 	}
 
-	bucket.children = append(bucket.children, &Node{threshold: ModTimeThreshold(now.Add(-decade))})
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-decade)),
+	})
 
-	bucket.children = append(bucket.children, &Node{threshold: nil})
+	bucket.children = append(bucket.children, &Node{
+		threshold: nil,
+	})
 
 	return bucket
 }
@@ -131,21 +163,47 @@ func NewModTimeBucket() *Node {
 func NewSizeBucket() *Node {
 	bucket := new(Node)
 
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000000000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100000000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10000000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10000)})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(1000000000),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(100000000),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(10000000),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(1000000),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(100000),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(10000),
+	})
 	// <4096 and <4097 are very popular file sizes
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(4097)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(4096)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1000)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(100)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(10)})
-	bucket.children = append(bucket.children, &Node{threshold: SizeThreshold(1)})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(4097),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(4096),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(1000),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(100),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(10),
+	})
+	bucket.children = append(bucket.children, &Node{
+		threshold: SizeThreshold(1),
+	})
 
-	bucket.children = append(bucket.children, &Node{threshold: nil})
+	bucket.children = append(bucket.children, &Node{
+		threshold: nil,
+	})
 
 	return bucket
 }
@@ -154,7 +212,7 @@ func (node *Node) Merge(sortcolumn SortColumn, files []*FileEntry) {
 	Insert(sortcolumn, node, 0, files)
 }
 
-func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) ([]*FileEntry, []Bucket) {
+func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -164,7 +222,6 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 	}
 
 	var result []*FileEntry
-	var nodes []Bucket
 	WalkNodes(node, direction, func(child Bucket) bool {
 		childnode := child.Node()
 
@@ -176,13 +233,9 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 		sorted := childnode.sorted
 		l := len(sorted)
 
-		if l > 0 {
-			nodes = append(nodes, childnode)
-		}
-
 		for i := 0; i < len(sorted); i++ {
 			index := indexfunc(l, i)
-			if query == nil || query.MatchString(sorted[index].path) || query.MatchString(sorted[index].name) {
+			if query == nil || query.MatchString(sorted[index].name) || query.MatchString(sorted[index].path) {
 				result = append(result, sorted[index])
 			}
 
@@ -194,7 +247,7 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 		return true
 	})
 
-	return result, nodes
+	return result
 }
 
 func (node *Node) NumFiles() int {
@@ -243,8 +296,9 @@ func (node *Node) Sort(sortcolumn SortColumn) {
 
 func (node *Node) AddBranch(threshold Threshold, entries []*FileEntry) {
 	newnode := &Node{
-		threshold: threshold,
-		sorted:    make([]*FileEntry, len(entries)),
+		threshold:  threshold,
+		lastchange: time.Now(),
+		sorted:     make([]*FileEntry, len(entries)),
 	}
 	copy(newnode.sorted, entries)
 	node.children = append(node.children, newnode)
@@ -282,23 +336,28 @@ func WalkEntries(bucket Bucket, direction gtk.SortType, f func(entry *FileEntry)
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
+	node.mutex.Lock()
 	for i := range node.children {
 		child := node.children[indexfunc(len(node.children), i)]
 		if len(child.(*Node).children) > 0 {
+			node.mutex.Unlock()
 			if !WalkEntries(child, direction, f) {
 				return false
 			}
+			node.mutex.Lock()
 		} else {
 			sorted := child.(*Node).sorted
 			for j := range sorted {
 				entry := sorted[indexfunc(len(sorted), j)]
 				if !f(entry) {
+					node.mutex.Unlock()
 					return false
 				}
 			}
 		}
 	}
 
+	node.mutex.Unlock()
 	return true
 }
 
@@ -329,8 +388,8 @@ func WalkNodes(bucket Bucket, direction gtk.SortType, f func(bucket Bucket) bool
 			}
 		}
 	}
-	node.mutex.Unlock()
 
+	node.mutex.Unlock()
 	return true
 }
 
@@ -358,17 +417,20 @@ func Print(bucket Bucket, level int) {
 
 func Insert(sortcolumn SortColumn, bucket Bucket, first int, files []*FileEntry) int {
 	node := bucket.Node()
+	node.lastchange = time.Now()
 
 	i := first
 	for _, child := range node.children {
 		childnode := child.Node()
+
 		childnode.mutex.Lock()
 		for i < len(files) && child.Less(files[i]) {
 			if len(childnode.children) > 0 {
-				childnode.mutex.Unlock()
+				//childnode.mutex.Unlock()
 				i = Insert(sortcolumn, child, i, files)
-				childnode.mutex.Lock()
+				//childnode.mutex.Lock()
 			} else {
+				childnode.lastchange = time.Now()
 				childnode.queue = append(childnode.queue, files[i])
 				i += 1
 			}
@@ -391,6 +453,7 @@ func Split(sortcolumn SortColumn, bucket Bucket, numparts int) {
 	// - we want to split this node.sorted slice into numparts parts and create a childnode
 	// in node.children for each of them
 	node := bucket.Node()
+	node.lastchange = time.Now()
 
 	// - its an expensive operation, so we only do it when we have to, in node.queue we accumulate
 	// entries and split once we have enough entries accumulated (this check is done outside of this

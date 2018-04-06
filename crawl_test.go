@@ -20,26 +20,12 @@ func TestFileEntries(t *testing.T) {
 	}
 	log.Println("running TestFileEntries")
 
-	display := DisplayChannel{
-		make(chan CrawlResult),
-		make(chan CrawlResult),
-		make(chan CrawlResult),
-	}
 	mem := ResultMemory{
 		new(FileEntries),
 		new(FileEntries),
 		new(FileEntries),
 	}
 	finish := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-display.byname:
-			case <-display.bymodtime:
-			case <-display.bysize:
-			}
-		}
-	}()
 
 	//directories := []string{os.Getenv("HOME")}
 	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
@@ -49,7 +35,7 @@ func TestFileEntries(t *testing.T) {
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
 	wg.Add(1)
-	go Crawler(&wg, cores*2, mem, display, newdirs, finish)
+	go Crawler(&wg, cores*2, mem, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
 	}
@@ -58,9 +44,9 @@ func TestFileEntries(t *testing.T) {
 	log.Println("Crawl terminated")
 
 	query, _ := regexp.Compile("golocate")
-	byname := mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
-	bymodtime := mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
-	bysize := mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
+	byname, _ := mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
+	bymodtime, _ := mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
+	bysize, _ := mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
@@ -76,25 +62,11 @@ func TestFileEntries(t *testing.T) {
 func BenchmarkCrawlLargeSlice(b *testing.B) {
 	b.StopTimer()
 
-	display := DisplayChannel{
-		make(chan CrawlResult),
-		make(chan CrawlResult),
-		make(chan CrawlResult),
-	}
 	mem := ResultMemory{
 		new(FileEntries),
 		new(FileEntries),
 		new(FileEntries),
 	}
-	go func() {
-		for {
-			select {
-			case <-display.byname:
-			case <-display.bymodtime:
-			case <-display.bysize:
-			}
-		}
-	}()
 	directories := []string{path.Join(os.Getenv("HOME"), "/go/src/golocate")}
 	newdirs := make(chan string)
 
@@ -104,7 +76,7 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go Crawler(&wg, cores, mem, display, newdirs, finish)
+		go Crawler(&wg, cores, mem, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
 		}
@@ -121,25 +93,11 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 func BenchmarkCrawlBuckets(b *testing.B) {
 	b.StopTimer()
 
-	display := DisplayChannel{
-		make(chan CrawlResult),
-		make(chan CrawlResult),
-		make(chan CrawlResult),
-	}
 	mem := ResultMemory{
 		NewNameBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	go func() {
-		for {
-			select {
-			case <-display.byname:
-			case <-display.bymodtime:
-			case <-display.bysize:
-			}
-		}
-	}()
 	directories := []string{path.Join(os.Getenv("HOME"), "/go/src/golocate")}
 	newdirs := make(chan string)
 
@@ -149,7 +107,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go Crawler(&wg, cores, mem, display, newdirs, finish)
+		go Crawler(&wg, cores, mem, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
 		}
