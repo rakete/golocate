@@ -207,39 +207,56 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	}
 }
 
-func updateList(wg *sync.WaitGroup, bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) {
+func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}) {
 	if bucket == nil {
 		return
 	}
 
+	taken := make(chan *FileEntry)
 	var entries []*FileEntry
-	entries = bucket.Node().Take(sortcolumn, direction, query, n)
-	if len(entries) > 0 {
-		log.Println("displaying", len(entries), "entries")
-	}
-
-	wg.Add(1)
-	glib.IdleAdd(func() {
-		if len(entries) < n {
-			liststore.Clear()
-		}
-
-		i := 0
-		iter, valid := liststore.GetIterFirst()
-		for i < len(entries) && valid == true {
-			updateEntry(iter, liststore, entries[i])
-			valid = liststore.IterNext(iter)
-			i += 1
-		}
-
-		if i < len(entries) {
-			for _, entry := range entries[i:] {
-				addEntry(liststore, entry)
-				i += 1
+	aborttake := make(chan struct{})
+	aborted := false
+	go func() {
+		for {
+			select {
+			case <-abort:
+				entries = nil
+				aborted = true
+				close(aborttake)
+				return
+			case entry := <-taken:
+				if entry == nil {
+					return
+				}
+				entries = append(entries, entry)
 			}
 		}
-		wg.Done()
-	})
+	}()
+	bucket.Node().Take(sortcolumn, direction, query, n, aborttake, taken)
+
+	if !aborted {
+		log.Println("displaying", len(entries), "entries")
+		glib.IdleAdd(func() {
+			if len(entries) < n {
+				liststore.Clear()
+			}
+
+			i := 0
+			iter, valid := liststore.GetIterFirst()
+			for i < len(entries) && valid == true {
+				updateEntry(iter, liststore, entries[i])
+				valid = liststore.IterNext(iter)
+				i += 1
+			}
+
+			if i < len(entries) {
+				for _, entry := range entries[i:] {
+					addEntry(liststore, entry)
+					i += 1
+				}
+			}
+		})
+	}
 }
 
 type View struct {
@@ -256,6 +273,8 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 	lastpoll := time.Unix(0, 0)
 	inc := 1000
 	n := inc
+	abort := make(chan struct{})
+	finish := make(chan struct{}, 1)
 
 	for {
 		select {
@@ -266,13 +285,14 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 			n = inc
 			lastpoll = time.Unix(0, 0)
 		case searchterm := <-view.searchterm:
-			var err error
-			currentquery, err = regexp.Compile(searchterm)
-			if err != nil {
-				log.Println(searchterm, err)
-				currentquery = nil
+			query, err := regexp.Compile(searchterm)
+			if err == nil {
+				currentquery = query
+				close(abort)
+				<-abort
+				abort = make(chan struct{})
+				lastpoll = time.Unix(0, 0)
 			}
-			lastpoll = time.Unix(0, 0)
 		case newsort := <-view.sort:
 			if currentsort == newsort {
 				if currentdirection == OPPOSITE_DIRECTION {
@@ -299,10 +319,16 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 		}
 
 		if currentbucket.Node().lastchange.After(lastpoll) {
-			var wg sync.WaitGroup
-			go updateList(&wg, currentbucket, liststore, currentsort, currentdirection, currentquery, n)
-			wg.Wait()
-			lastpoll = time.Now()
+			if len(finish) == 0 {
+				finish <- struct{}{}
+				lastpoll = time.Now()
+				go func() {
+					updateList(currentbucket, liststore, currentsort, currentdirection, currentquery, n, abort)
+					<-finish
+				}()
+			} else {
+				lastpoll = time.Unix(0, 0)
+			}
 		}
 	}
 }

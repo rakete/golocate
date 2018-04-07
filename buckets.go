@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	//"sort"
+	//"path"
 	"regexp"
 	"sync"
 	"time"
@@ -212,7 +213,8 @@ func (node *Node) Merge(sortcolumn SortColumn, files []*FileEntry) {
 	Insert(sortcolumn, node, 0, files)
 }
 
-func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int) []*FileEntry {
+func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
+	fmt.Println("Take start", query)
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -221,7 +223,10 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
-	var result []*FileEntry
+	numresults := 0
+	aborted := false
+	namecache := map[string]bool{}
+	pathcache := map[string]bool{}
 	WalkNodes(node, direction, func(child Bucket) bool {
 		childnode := child.Node()
 
@@ -234,20 +239,66 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 		l := len(sorted)
 
 		for i := 0; i < len(sorted); i++ {
-			index := indexfunc(l, i)
-			if query == nil || query.MatchString(sorted[index].name) || query.MatchString(sorted[index].path) {
-				result = append(result, sorted[index])
-			}
-
-			if len(result) >= n {
+			select {
+			case <-abort:
+				fmt.Println("Take abort", query)
+				aborted = true
 				return false
+			default:
+				index := indexfunc(l, i)
+				entry := sorted[index]
+				entryname := entry.name
+				entrypath := entry.path
+				matchedname, knownname := namecache[entryname]
+				matchedpath, knownpath := pathcache[entrypath]
+
+				if query != nil && !matchedname && !matchedpath {
+					// if !knownname || !knownpath {
+					// 	loc := query.FindStringIndex(path.Join(entrypath, entryname))
+					// 	if loc != nil {
+					// 		l := len(entrypath)
+					// 		if loc[1] <= l {
+					// 			matchedpath = true
+					// 		} else if loc[0] > l {
+					// 			matchedname = true
+					// 		} else if loc[0] <= l && loc[1] > l {
+					// 			matchedname = true
+					// 		}
+					// 	}
+
+					// 	pathcache[entrypath] = matchedpath
+					// 	namecache[entryname] = matchedname
+
+					// }
+
+					if !knownname {
+						matchedname = query.MatchString(entryname)
+						namecache[entryname] = matchedname
+					}
+					if !knownpath && !matchedname {
+						matchedpath = query.MatchString(entrypath)
+						pathcache[entrypath] = matchedpath
+					}
+				}
+
+				if query == nil || matchedname || matchedpath {
+					results <- entry
+					numresults += 1
+				}
+
+				if numresults >= n {
+					return false
+				}
 			}
 		}
 
 		return true
 	})
 
-	return result
+	if !aborted {
+		results <- nil
+	}
+	fmt.Println("Take done", query)
 }
 
 func (node *Node) NumFiles() int {
