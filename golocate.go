@@ -4,7 +4,6 @@ import (
 	//"fmt"
 	"log"
 	"os"
-	//"path"
 	"regexp"
 	"runtime"
 	"sync"
@@ -207,7 +206,7 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	}
 }
 
-func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}) {
+func updateList(cache *MatchCache, bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}) {
 	if bucket == nil {
 		return
 	}
@@ -232,7 +231,7 @@ func updateList(bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, 
 			}
 		}
 	}()
-	bucket.Node().Take(sortcolumn, direction, query, n, aborttake, taken)
+	bucket.Node().Take(cache, sortcolumn, direction, query, n, aborttake, taken)
 
 	if !aborted {
 		log.Println("displaying", len(entries), "entries")
@@ -275,6 +274,7 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 	n := inc
 	abort := make(chan struct{})
 	finish := make(chan struct{}, 1)
+	cache := MatchCache{make(map[string]bool), make(map[string]bool)}
 
 	for {
 		select {
@@ -287,6 +287,7 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 		case searchterm := <-view.searchterm:
 			query, err := regexp.Compile(searchterm)
 			if err == nil {
+				cache = MatchCache{make(map[string]bool), make(map[string]bool)}
 				currentquery = query
 				close(abort)
 				<-abort
@@ -323,7 +324,7 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 				finish <- struct{}{}
 				lastpoll = time.Now()
 				go func() {
-					updateList(currentbucket, liststore, currentsort, currentdirection, currentquery, n, abort)
+					updateList(&cache, currentbucket, liststore, currentsort, currentdirection, currentquery, n, abort)
 					<-finish
 				}()
 			} else {

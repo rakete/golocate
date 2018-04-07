@@ -34,9 +34,14 @@ type ResultMemory struct {
 	bysize    CrawlResult
 }
 
+type MatchCache struct {
+	paths map[string]bool
+	names map[string]bool
+}
+
 type CrawlResult interface {
 	Merge(sortcolumn SortColumn, files []*FileEntry)
-	Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry)
+	Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry)
 	NumFiles() int
 }
 
@@ -46,7 +51,7 @@ func (entries *FileEntries) Merge(_ SortColumn, files []*FileEntry) {
 	*entries = append(*entries, files...)
 }
 
-func (entries *FileEntries) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
+func (entries *FileEntries) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:

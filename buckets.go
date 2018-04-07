@@ -213,7 +213,7 @@ func (node *Node) Merge(sortcolumn SortColumn, files []*FileEntry) {
 	Insert(sortcolumn, node, 0, files)
 }
 
-func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
+func (node *Node) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
 	fmt.Println("Take start", query)
 	var indexfunc func(int, int) int
 	switch direction {
@@ -225,8 +225,14 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 
 	numresults := 0
 	aborted := false
-	namecache := map[string]bool{}
-	pathcache := map[string]bool{}
+	var namecache, pathcache *map[string]bool
+	if cache != nil {
+		namecache = &cache.names
+		pathcache = &cache.paths
+	} else {
+		namecache = &map[string]bool{}
+		pathcache = &map[string]bool{}
+	}
 	WalkNodes(node, direction, func(child Bucket) bool {
 		childnode := child.Node()
 
@@ -249,35 +255,23 @@ func (node *Node) Take(sortcolumn SortColumn, direction gtk.SortType, query *reg
 				entry := sorted[index]
 				entryname := entry.name
 				entrypath := entry.path
-				matchedname, knownname := namecache[entryname]
-				matchedpath, knownpath := pathcache[entrypath]
 
-				if query != nil && !matchedname && !matchedpath {
-					// if !knownname || !knownpath {
-					// 	loc := query.FindStringIndex(path.Join(entrypath, entryname))
-					// 	if loc != nil {
-					// 		l := len(entrypath)
-					// 		if loc[1] <= l {
-					// 			matchedpath = true
-					// 		} else if loc[0] > l {
-					// 			matchedname = true
-					// 		} else if loc[0] <= l && loc[1] > l {
-					// 			matchedname = true
-					// 		}
-					// 	}
+				matchedname := false
+				matchedpath := false
+				if query != nil {
+					var knownname, knownpath bool
+					matchedname, knownname = (*namecache)[entryname]
+					matchedpath, knownpath = (*pathcache)[entrypath]
 
-					// 	pathcache[entrypath] = matchedpath
-					// 	namecache[entryname] = matchedname
-
-					// }
-
-					if !knownname {
-						matchedname = query.MatchString(entryname)
-						namecache[entryname] = matchedname
-					}
-					if !knownpath && !matchedname {
-						matchedpath = query.MatchString(entrypath)
-						pathcache[entrypath] = matchedpath
+					if !matchedname && !matchedpath {
+						if !knownname {
+							matchedname = query.MatchString(entryname)
+							(*namecache)[entryname] = matchedname
+						}
+						if !knownpath && !matchedname {
+							matchedpath = query.MatchString(entrypath)
+							(*pathcache)[entrypath] = matchedpath
+						}
 					}
 				}
 
