@@ -6,9 +6,10 @@ import (
 	//"path"
 	"regexp"
 	"sync"
+	//"syscall"
 	"time"
 
-	"github.com/gotk3/gotk3/gtk"
+	gtk "github.com/gotk3/gotk3/gtk"
 )
 
 type Threshold interface {
@@ -214,7 +215,6 @@ func (node *Node) Merge(sortcolumn SortColumn, files []*FileEntry) {
 }
 
 func (node *Node) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
-	fmt.Println("Take start", query)
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -247,7 +247,6 @@ func (node *Node) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.S
 		for i := 0; i < len(sorted); i++ {
 			select {
 			case <-abort:
-				fmt.Println("Take abort", query)
 				aborted = true
 				return false
 			default:
@@ -292,7 +291,6 @@ func (node *Node) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.S
 	if !aborted {
 		results <- nil
 	}
-	fmt.Println("Take done", query)
 }
 
 func (node *Node) NumFiles() int {

@@ -5,13 +5,15 @@ import (
 	"log"
 	"os"
 	//"time"
+	"path"
 	"regexp"
 	"runtime"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/gotk3/gotk3/gtk"
+	pcre "github.com/gijsbers/go-pcre"
+	gtk "github.com/gotk3/gotk3/gtk"
 
 	"testing"
 )
@@ -46,10 +48,32 @@ func TestBuckets(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	query, _ := regexp.Compile("golocate")
-	byname, _ := mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
-	bymodtime, _ := mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
-	bysize, _ := mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
+	searchterm := "golocate"
+	query, _ := regexp.Compile(searchterm)
+	cache := MatchCache{make(map[string]bool), make(map[string]bool)}
+	abort := make(chan struct{})
+	taken := make(chan *FileEntry)
+
+	var byname, bymodtime, bysize []*FileEntry
+
+	taker := func(xs *[]*FileEntry) {
+		for {
+			entry := <-taken
+			if entry == nil {
+				return
+			}
+			*xs = append(*xs, entry)
+		}
+	}
+
+	go taker(&byname)
+	mem.byname.Take(&cache, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
+	go taker(&bymodtime)
+	mem.bymodtime.Take(&cache, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
+	go taker(&bysize)
+	mem.bysize.Take(&cache, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
@@ -146,4 +170,120 @@ func TestLess(t *testing.T) {
 	}
 
 	log.Println("TestLess finished")
+}
+
+func BenchmarkRegexpBuiltin(b *testing.B) {
+	b.StopTimer()
+
+	mem := ResultMemory{
+		NewNameBucket(),
+		NewModTimeBucket(),
+		NewSizeBucket(),
+	}
+	directories := []string{path.Join(os.Getenv("GOPATH"))}
+	newdirs := make(chan string)
+
+	cores := runtime.NumCPU()
+
+	finish := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go Crawler(&wg, cores, mem, newdirs, finish)
+	for _, dir := range directories {
+		newdirs <- dir
+	}
+	wg.Wait()
+	close(finish)
+
+	searchterm1 := ".*\\.cc$"
+	query1, _ := regexp.Compile(searchterm1)
+	searchterm2 := ".*\\.cc"
+	query2, _ := regexp.Compile(searchterm2)
+	searchterm3 := ".*\\."
+	query3, _ := regexp.Compile(searchterm3)
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		WalkEntries(mem.bymodtime.(*Node), gtk.SORT_ASCENDING, func(entry *FileEntry) bool {
+			query1.MatchString(entry.name)
+			query1.MatchString(entry.path)
+
+			query2.MatchString(entry.name)
+			query2.MatchString(entry.path)
+
+			query3.MatchString(entry.name)
+			query3.MatchString(entry.path)
+			return true
+		})
+	}
+}
+
+func BenchmarkRegexpPCRE(b *testing.B) {
+	runtime.LockOSThread()
+
+	b.StopTimer()
+
+	mem := ResultMemory{
+		NewNameBucket(),
+		NewModTimeBucket(),
+		NewSizeBucket(),
+	}
+	directories := []string{path.Join(os.Getenv("GOPATH"))}
+	newdirs := make(chan string)
+
+	cores := runtime.NumCPU()
+
+	finish := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go Crawler(&wg, cores, mem, newdirs, finish)
+	for _, dir := range directories {
+		newdirs <- dir
+	}
+	wg.Wait()
+	close(finish)
+
+	searchterm1 := ".*\\.cc$"
+	searchterm2 := ".*\\.cc"
+	searchterm3 := ".*\\."
+
+	pcrere1, pcreerr1 := pcre.CompileJIT(searchterm1, pcre.DOTALL|pcre.UTF8|pcre.UCP, pcre.STUDY_JIT_COMPILE)
+	if pcreerr1 != nil {
+		log.Println(pcreerr1)
+	}
+
+	pcrere2, pcreerr2 := pcre.CompileJIT(searchterm2, pcre.DOTALL|pcre.UTF8|pcre.UCP, pcre.STUDY_JIT_COMPILE)
+	if pcreerr2 != nil {
+		log.Println(pcreerr2)
+	}
+
+	pcrere3, pcreerr3 := pcre.CompileJIT(searchterm3, pcre.DOTALL|pcre.UTF8|pcre.UCP, pcre.STUDY_JIT_COMPILE)
+	if pcreerr3 != nil {
+		log.Println(pcreerr3)
+	}
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		WalkEntries(mem.bymodtime.(*Node), gtk.SORT_ASCENDING, func(entry *FileEntry) bool {
+			namematcher1 := pcrere1.MatcherString(entry.name, 0)
+			namematcher1.Matches()
+			pathmatcher1 := pcrere1.MatcherString(entry.path, 0)
+			pathmatcher1.Matches()
+
+			namematcher2 := pcrere2.MatcherString(entry.name, 0)
+			namematcher2.Matches()
+			pathmatcher2 := pcrere2.MatcherString(entry.path, 0)
+			pathmatcher2.Matches()
+
+			namematcher3 := pcrere3.MatcherString(entry.name, 0)
+			namematcher3.Matches()
+			pathmatcher3 := pcrere3.MatcherString(entry.path, 0)
+			pathmatcher3.Matches()
+
+			return true
+		})
+	}
+
+	runtime.UnlockOSThread()
+
 }

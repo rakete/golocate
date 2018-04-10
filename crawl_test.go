@@ -43,10 +43,32 @@ func TestFileEntries(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	query, _ := regexp.Compile("golocate")
-	byname, _ := mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
-	bymodtime, _ := mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
-	bysize, _ := mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
+	searchterm := "golocate"
+	query, _ := regexp.Compile(searchterm)
+	cache := MatchCache{make(map[string]bool), make(map[string]bool)}
+	abort := make(chan struct{})
+	taken := make(chan *FileEntry)
+
+	var byname, bymodtime, bysize []*FileEntry
+
+	taker := func(xs *[]*FileEntry) {
+		for {
+			entry := <-taken
+			if entry == nil {
+				return
+			}
+			*xs = append(*xs, entry)
+		}
+	}
+
+	go taker(&byname)
+	mem.byname.Take(&cache, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
+	go taker(&bymodtime)
+	mem.bymodtime.Take(&cache, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
+	go taker(&bysize)
+	mem.bysize.Take(&cache, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 
 	log.Println("len(byname):", len(byname))
 	log.Println("len(bymodtime):", len(bymodtime))
@@ -75,18 +97,41 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
-		wg.Add(1)
+		wg.Add(2)
 		go Crawler(&wg, cores, mem, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
 		}
+		wg.Done()
 		wg.Wait()
 		close(finish)
 
-		query, _ := regexp.Compile(".*")
-		mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
-		mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
-		mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
+		searchterm := ".*"
+		query, _ := regexp.Compile(searchterm)
+		cache := MatchCache{make(map[string]bool), make(map[string]bool)}
+		abort := make(chan struct{})
+		taken := make(chan *FileEntry)
+
+		var byname, bymodtime, bysize []*FileEntry
+
+		taker := func(xs *[]*FileEntry) {
+			for {
+				entry := <-taken
+				if entry == nil {
+					return
+				}
+				*xs = append(*xs, entry)
+			}
+		}
+
+		go taker(&byname)
+		mem.byname.Take(&cache, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
+		go taker(&bymodtime)
+		mem.bymodtime.Take(&cache, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
+		go taker(&bysize)
+		mem.bysize.Take(&cache, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 	}
 }
 
@@ -106,17 +151,40 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
-		wg.Add(1)
+		wg.Add(2)
 		go Crawler(&wg, cores, mem, newdirs, finish)
 		for _, dir := range directories {
 			newdirs <- dir
 		}
+		wg.Done()
 		wg.Wait()
 		close(finish)
 
-		query, _ := regexp.Compile(".*")
-		mem.byname.Take(SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000)
-		mem.bymodtime.Take(SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000)
-		mem.bysize.Take(SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000)
+		searchterm := ".*"
+		query, _ := regexp.Compile(searchterm)
+		cache := MatchCache{make(map[string]bool), make(map[string]bool)}
+		abort := make(chan struct{})
+		taken := make(chan *FileEntry)
+
+		var byname, bymodtime, bysize []*FileEntry
+
+		taker := func(xs *[]*FileEntry) {
+			for {
+				entry := <-taken
+				if entry == nil {
+					return
+				}
+				*xs = append(*xs, entry)
+			}
+		}
+
+		go taker(&byname)
+		mem.byname.Take(&cache, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
+		go taker(&bymodtime)
+		mem.bymodtime.Take(&cache, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
+		go taker(&bysize)
+		mem.bysize.Take(&cache, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 	}
 }
