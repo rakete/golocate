@@ -89,7 +89,7 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		new(FileEntries),
 		new(FileEntries),
 	}
-	directories := []string{path.Join(os.Getenv("HOME"), "/go/src/golocate")}
+	directories := []string{path.Join(os.Getenv("GOPATH"))}
 	newdirs := make(chan string)
 
 	cores := runtime.NumCPU()
@@ -143,7 +143,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	directories := []string{path.Join(os.Getenv("HOME"), "/go/src/golocate")}
+	directories := []string{path.Join(os.Getenv("GOPATH"))}
 	newdirs := make(chan string)
 
 	cores := runtime.NumCPU()

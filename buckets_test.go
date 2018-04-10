@@ -287,3 +287,64 @@ func BenchmarkRegexpPCRE(b *testing.B) {
 	runtime.UnlockOSThread()
 
 }
+
+func BenchmarkTake(b *testing.B) {
+	mem := ResultMemory{
+		NewNameBucket(),
+		NewModTimeBucket(),
+		NewSizeBucket(),
+	}
+	directories := []string{path.Join(os.Getenv("GOPATH"))}
+	newdirs := make(chan string)
+
+	cores := runtime.NumCPU()
+	finish := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go Crawler(&wg, cores, mem, newdirs, finish)
+	for _, dir := range directories {
+		newdirs <- dir
+	}
+	wg.Done()
+	wg.Wait()
+	close(finish)
+
+	searchterm := ".*\\.go$"
+	query, _ := regexp.Compile(searchterm)
+	cache := MatchCache{make(map[string]bool), make(map[string]bool)}
+	abort := make(chan struct{})
+	taken := make(chan *FileEntry)
+
+	var byname []*FileEntry
+	taker := func(xs *[]*FileEntry) {
+		for {
+			entry := <-taken
+			if entry == nil {
+				return
+			}
+			*xs = append(*xs, entry)
+		}
+	}
+
+	benchmarks := []struct {
+		name      string
+		mem       CrawlResult
+		sorting   SortColumn
+		direction gtk.SortType
+		query     *regexp.Regexp
+		n         int
+	}{
+		{"ByName", mem.byname, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000},
+		{"ByModTime", mem.bymodtime, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000},
+		{"BySize", mem.bysize, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				go taker(&byname)
+				bm.mem.Take(&cache, bm.sorting, bm.direction, bm.query, bm.n, abort, taken)
+			}
+		})
+	}
+}
