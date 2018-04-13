@@ -311,7 +311,6 @@ func BenchmarkTake(b *testing.B) {
 
 	searchterm := ".*\\.go$"
 	query, _ := regexp.Compile(searchterm)
-	cache := MatchCache{make(map[string]bool), make(map[string]bool)}
 	abort := make(chan struct{})
 	taken := make(chan *FileEntry)
 
@@ -342,6 +341,7 @@ func BenchmarkTake(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
+				cache := MatchCache{new(sync.Map), new(sync.Map)}
 				go taker(&byname)
 				bm.mem.Take(&cache, bm.sorting, bm.direction, bm.query, bm.n, abort, taken)
 			}
