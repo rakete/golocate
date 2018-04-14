@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -84,53 +83,13 @@ func setupTreeView() (*gtk.TreeView, *gtk.ListStore) {
 	return treeview, liststore
 }
 
-func setupSearchBar() (*gtk.SearchBar, *gtk.SearchEntry) {
-	searchbar, err := gtk.SearchBarNew()
-	if err != nil {
-		log.Fatal("Could not create search bar:", err)
-	}
-	searchbar.SetSearchMode(true)
-
-	horizontalbox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	if err != nil {
-		log.Fatal("Unable to create box:", err)
-	}
-
-	searchentry, err := gtk.SearchEntryNew()
-	if err != nil {
-		log.Fatal("Could not create search entry:", err)
-	}
-	searchentry.SetSizeRequest(400, 0)
-
-	searchbar.Add(horizontalbox)
-	horizontalbox.PackStart(searchentry, true, true, 0)
-	searchbar.ConnectEntry(searchentry)
-
-	return searchbar, searchentry
-}
-
-func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar *gtk.SearchBar, title string) (*gtk.ApplicationWindow, *gtk.ScrolledWindow) {
-	appwin, err := gtk.ApplicationWindowNew(application)
-	if err != nil {
-		log.Fatal("Unable to create window:", err)
-	}
-
-	// win, err := gtk.WindowNew(gtk.WINDOW_TOPLEVEL)
-	// if err != nil {
-	// 	log.Fatal("Unable to create window:", err)
-	// }
-	// win.Connect("destroy", func() {
-	// 	gtk.MainQuit()
-	// })
-	// application.AddWindow(win)
+func setupWindow(application *gtk.Application, treeview *gtk.TreeView, title string) (*gtk.ApplicationWindow, *gtk.ScrolledWindow, *gtk.SearchEntry) {
 
 	header, err := gtk.HeaderBarNew()
 	if err != nil {
 		log.Fatal("Could not create header bar:", err)
 	}
 	header.SetShowCloseButton(true)
-	header.SetTitle(title)
-	header.SetSubtitle("finding files with fearless concurrency")
 
 	mbtn, err := gtk.MenuButtonNew()
 	if err != nil {
@@ -142,15 +101,29 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 		log.Fatal("Could not create menu (nil)")
 	}
 	menu.Append("Crawl", "app.crawl")
-
 	menu.Append("Quit", "app.quit")
 
 	mbtn.SetMenuModel(&menu.MenuModel)
 	header.PackStart(mbtn)
 
+	searchentry, err := gtk.SearchEntryNew()
+	if err != nil {
+		log.Fatal("Could not create search entry:", err)
+	}
+
+	searchentry.SetHAlign(gtk.ALIGN_FILL)
+	searchentry.SetHExpand(true)
+	searchentry.SetWidthChars(40)
+
+	header.SetCustomTitle(searchentry)
+
+	appwin, err := gtk.ApplicationWindowNew(application)
+	if err != nil {
+		log.Fatal("Unable to create window:", err)
+	}
+
 	appwin.SetTitle(title)
 	appwin.SetTitlebar(header)
-	appwin.SetPosition(gtk.WIN_POS_MOUSE)
 	appwin.SetPosition(gtk.WIN_POS_CENTER)
 	appwin.SetDefaultSize(1700, 1000)
 
@@ -165,12 +138,11 @@ func setupWindow(application *gtk.Application, treeview *gtk.TreeView, searchbar
 	}
 
 	appwin.Add(verticalbox)
-	verticalbox.PackStart(searchbar, false, false, 0)
 	scrollwin.Add(treeview)
 	verticalbox.PackStart(scrollwin, true, true, 5)
 	appwin.ShowAll()
 
-	return appwin, scrollwin
+	return appwin, scrollwin, searchentry
 }
 
 func addEntry(liststore *gtk.ListStore, entry *FileEntry) gtk.TreeIter {
@@ -383,16 +355,13 @@ func main() {
 	finish := make(chan struct{})
 	cores := runtime.NumCPU()
 
-	var liststore *gtk.ListStore
-	var treeview *gtk.TreeView
-	var searchbar *gtk.SearchBar
-	var searchentry *gtk.SearchEntry
 	view := View{make(chan SortColumn), make(chan struct{}), make(chan struct{}), make(chan string)}
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
-		treeview, liststore = setupTreeView()
-		searchbar, searchentry = setupSearchBar()
+		treeview, liststore := setupTreeView()
+		_, scrollwin, searchentry := setupWindow(application, treeview, "golocate")
+		searchentry.GrabFocus()
 
 		go Controller(liststore, mem, view)
 
@@ -429,11 +398,6 @@ func main() {
 		for _, dir := range directories {
 			newdirs <- dir
 		}
-
-		appwin, scrollwin := setupWindow(application, treeview, searchbar, "golocate")
-		appwin.Window.Connect("key-press-event", func(win *gtk.ApplicationWindow, ev *gdk.Event) {
-			searchbar.HandleEvent(ev)
-		})
 
 		lastupper := -1.0
 		adjustment := scrollwin.GetVAdjustment()
