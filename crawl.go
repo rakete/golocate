@@ -34,24 +34,64 @@ type ResultMemory struct {
 	bysize    CrawlResult
 }
 
-type MatchCache struct {
-	paths map[string]bool
-	names map[string]bool
+type Cache interface {
+	Test(k string) (bool, bool)
+	Put(k string, v bool)
+}
+
+type SyncCache sync.Map
+
+func NewSyncCache() *SyncCache {
+	return new(SyncCache)
+}
+
+func (c *SyncCache) Test(k string) (bool, bool) {
+	v, ok := (*sync.Map)(c).Load(k)
+	ret, _ := v.(bool)
+	return ret, ok
+}
+
+func (c *SyncCache) Put(k string, v bool) {
+	(*sync.Map)(c).Store(k, v)
+}
+
+type SimpleCache map[string]bool
+
+func NewSimpleCache() *SimpleCache {
+	empty := SimpleCache(map[string]bool{})
+	return &empty
+}
+
+func (c *SimpleCache) Test(k string) (bool, bool) {
+	v, ok := (*c)[k]
+	return v, ok
+}
+
+func (c *SimpleCache) Put(k string, v bool) {
+	(*c)[k] = v
+}
+
+type MatchCaches struct {
+	paths Cache
+	names Cache
 }
 
 type CrawlResult interface {
 	Merge(sortcolumn SortColumn, files []*FileEntry)
-	Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry)
+	Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry)
 	NumFiles() int
 }
 
-type FileEntries []*FileEntry
-
-func (entries *FileEntries) Merge(_ SortColumn, files []*FileEntry) {
-	*entries = append(*entries, files...)
+type FileEntries struct {
+	queue  []*FileEntry
+	sorted []*FileEntry
 }
 
-func (entries *FileEntries) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
+func (entries *FileEntries) Merge(_ SortColumn, files []*FileEntry) {
+	entries.queue = append(entries.queue, files...)
+}
+
+func (entries *FileEntries) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -60,38 +100,90 @@ func (entries *FileEntries) Take(cache *MatchCache, sortcolumn SortColumn, direc
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
-	var sorted FileEntries
 	switch sortcolumn {
 	case SORT_BY_NAME:
-		sorted = FileEntries(sortFileEntries(SortedByName(*entries)).(SortedByName))
+		entries.queue = sortFileEntries(SortedByName(entries.queue)).(SortedByName)
 	case SORT_BY_MODTIME:
-		sorted = FileEntries(sortFileEntries(SortedByModTime(*entries)).(SortedByModTime))
+		entries.queue = sortFileEntries(SortedByModTime(entries.queue)).(SortedByModTime)
 	case SORT_BY_SIZE:
-		sorted = FileEntries(sortFileEntries(SortedBySize(*entries)).(SortedBySize))
+		entries.queue = sortFileEntries(SortedBySize(entries.queue)).(SortedBySize)
 	}
+	entries.sorted = sortMerge(sortcolumn, entries.sorted, entries.queue)
+	entries.queue = nil
 
-	l := len(sorted)
+	l := len(entries.sorted)
 	if n > l {
 		n = l
 	}
 
 	numresults := 0
-	for i := 0; i < len(sorted); i++ {
-		index := indexfunc(l, i)
-		if query == nil || query.MatchString(sorted[index].name) || query.MatchString(sorted[index].path) {
-			results <- sorted[index]
-			numresults += 1
-		}
-
-		if numresults >= n {
-			break
-		}
+	aborted := false
+	var namecache, pathcache Cache
+	if cache.names != nil {
+		namecache = cache.names
+	} else {
+		empty := SimpleCache(map[string]bool{})
+		namecache = &empty
 	}
 
-	results <- nil
+	if cache.paths != nil {
+		pathcache = cache.paths
+	} else {
+		empty := SimpleCache(map[string]bool{})
+		pathcache = &empty
+	}
+
+sortedloop:
+	for i := 0; i < len(entries.sorted); i++ {
+		select {
+		case <-abort:
+			aborted = true
+			break sortedloop
+		default:
+
+			index := indexfunc(l, i)
+
+			entry := entries.sorted[index]
+			entryname := entry.name
+			entrypath := entry.path
+
+			var matchedname, knownname, matchedpath, knownpath bool
+			if query != nil {
+				matchedname, knownname = namecache.Test(entryname)
+				matchedpath, knownpath = pathcache.Test(entrypath)
+
+				if !matchedname && !matchedpath {
+					if !knownname {
+						matchedname = query.MatchString(entryname)
+						namecache.Put(entryname, matchedname)
+					}
+					if !knownpath && !matchedname {
+						matchedpath = query.MatchString(entrypath)
+						pathcache.Put(entrypath, matchedpath)
+					}
+				}
+			}
+
+			if query == nil || matchedname || matchedpath {
+				results <- entry
+				numresults += 1
+			}
+
+			if numresults >= n {
+				break sortedloop
+			}
+		}
+
+	}
+
+	if !aborted {
+		results <- nil
+	}
 }
 
-func (entries *FileEntries) NumFiles() int { return len(*entries) }
+func (entries *FileEntries) NumFiles() int {
+	return len(entries.queue) + len(entries.sorted)
+}
 
 func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, collect FilesChannel, dir string) {
 	entries, err := ioutil.ReadDir(dir)

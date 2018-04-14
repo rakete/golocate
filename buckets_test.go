@@ -50,7 +50,7 @@ func TestBuckets(t *testing.T) {
 
 	searchterm := "golocate"
 	query, _ := regexp.Compile(searchterm)
-	cache := MatchCache{make(map[string]bool), make(map[string]bool)}
+	cache := MatchCaches{NewSyncCache(), NewSyncCache()}
 	abort := make(chan struct{})
 	taken := make(chan *FileEntry)
 
@@ -67,17 +67,17 @@ func TestBuckets(t *testing.T) {
 	}
 
 	go taker(&byname)
-	mem.byname.Take(&cache, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+	mem.byname.Take(cache, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 
 	go taker(&bymodtime)
-	mem.bymodtime.Take(&cache, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+	mem.bymodtime.Take(cache, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 
 	go taker(&bysize)
-	mem.bysize.Take(&cache, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+	mem.bysize.Take(cache, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 
-	log.Println("len(byname):", len(byname))
-	log.Println("len(bymodtime):", len(bymodtime))
-	log.Println("len(bysize):", len(bysize))
+	log.Println("len(byname):", len(byname), mem.byname.NumFiles())
+	log.Println("len(bymodtime):", len(bymodtime), mem.bymodtime.NumFiles())
+	log.Println("len(bysize):", len(bysize), mem.bysize.NumFiles())
 
 	//Print(mem.byname.(*NameBucket), 0)
 	//Print(mem.bymodtime.(*ModTimeBucket), 0)
@@ -289,7 +289,12 @@ func BenchmarkRegexpPCRE(b *testing.B) {
 }
 
 func BenchmarkTake(b *testing.B) {
-	mem := ResultMemory{
+	memslice := ResultMemory{
+		new(FileEntries),
+		new(FileEntries),
+		new(FileEntries),
+	}
+	membuckets := ResultMemory{
 		NewNameBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
@@ -301,7 +306,17 @@ func BenchmarkTake(b *testing.B) {
 	finish := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go Crawler(&wg, cores, mem, newdirs, finish)
+	go Crawler(&wg, cores, memslice, newdirs, finish)
+	for _, dir := range directories {
+		newdirs <- dir
+	}
+	wg.Done()
+	wg.Wait()
+	close(finish)
+
+	finish = make(chan struct{})
+	wg.Add(2)
+	go Crawler(&wg, cores, membuckets, newdirs, finish)
 	for _, dir := range directories {
 		newdirs <- dir
 	}
@@ -333,17 +348,20 @@ func BenchmarkTake(b *testing.B) {
 		query     *regexp.Regexp
 		n         int
 	}{
-		{"ByName", mem.byname, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000},
-		{"ByModTime", mem.bymodtime, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000},
-		{"BySize", mem.bysize, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000},
+		{"SliceName", memslice.byname, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 10000},
+		{"SliceModTime", memslice.bymodtime, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 10000},
+		{"SliceSize", memslice.bysize, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 10000},
+		{"BucketName", membuckets.byname, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 10000},
+		{"BucketModTime", membuckets.bymodtime, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 10000},
+		{"BucketSize", membuckets.bysize, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 10000},
 	}
 
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				cache := MatchCache{new(sync.Map), new(sync.Map)}
+				cache := MatchCaches{NewSyncCache(), NewSyncCache()}
 				go taker(&byname)
-				bm.mem.Take(&cache, bm.sorting, bm.direction, bm.query, bm.n, abort, taken)
+				bm.mem.Take(cache, bm.sorting, bm.direction, bm.query, bm.n, abort, taken)
 			}
 		})
 	}

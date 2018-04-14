@@ -13,7 +13,7 @@ const (
 	SORT_BY_SIZE
 )
 
-type SortedByName FileEntries
+type SortedByName []*FileEntry
 
 func (a SortedByName) Len() int      { return len(a) }
 func (a SortedByName) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
@@ -21,7 +21,7 @@ func (a SortedByName) Less(i, j int) bool {
 	return a[i].name < a[j].name
 }
 
-type SortedByModTime FileEntries
+type SortedByModTime []*FileEntry
 
 func (a SortedByModTime) Len() int      { return len(a) }
 func (a SortedByModTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
@@ -29,7 +29,7 @@ func (a SortedByModTime) Less(i, j int) bool {
 	return a[i].modtime.After(a[j].modtime)
 }
 
-type SortedBySize FileEntries
+type SortedBySize []*FileEntry
 
 func (a SortedBySize) Len() int      { return len(a) }
 func (a SortedBySize) Swap(i, j int) { a[i], a[j] = a[j], a[i] }

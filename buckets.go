@@ -58,12 +58,13 @@ func (a SizeThreshold) String() string {
 }
 
 type Node struct {
-	threshold  Threshold
-	mutex      sync.Mutex
-	lastchange time.Time
-	queue      []*FileEntry
-	sorted     []*FileEntry
-	children   []Bucket
+	threshold   Threshold
+	queuemutex  sync.Mutex
+	sortedmutex sync.Mutex
+	lastchange  time.Time
+	queue       []*FileEntry
+	sorted      []*FileEntry
+	children    []Bucket
 }
 
 type Bucket interface {
@@ -214,7 +215,7 @@ func (node *Node) Merge(sortcolumn SortColumn, files []*FileEntry) {
 	Insert(sortcolumn, node, 0, files)
 }
 
-func (node *Node) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
+func (node *Node) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
 	var indexfunc func(int, int) int
 	switch direction {
 	case gtk.SORT_ASCENDING:
@@ -225,19 +226,32 @@ func (node *Node) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.S
 
 	numresults := 0
 	aborted := false
-	var namecache, pathcache *map[string]bool
-	if cache != nil {
-		namecache = &cache.names
-		pathcache = &cache.paths
+	var namecache, pathcache Cache
+	if cache.names != nil {
+		namecache = cache.names
 	} else {
-		namecache = &map[string]bool{}
-		pathcache = &map[string]bool{}
+		empty := SimpleCache(map[string]bool{})
+		namecache = &empty
 	}
+
+	if cache.paths != nil {
+		pathcache = cache.paths
+	} else {
+		empty := SimpleCache(map[string]bool{})
+		pathcache = &empty
+	}
+
+	// numcores := 8
+	// maxproc := make(chan struct{}, numcores)
+	// for i := 0; i < len(node.children); i++ {
+	// 	maxproc <- struct{}{}
+
+	// }
 	WalkNodes(node, direction, func(child Bucket) bool {
 		childnode := child.Node()
 
-		defer childnode.mutex.Unlock()
-		childnode.mutex.Lock()
+		defer childnode.sortedmutex.Unlock()
+		childnode.sortedmutex.Lock()
 
 		child.Sort(sortcolumn)
 
@@ -255,21 +269,19 @@ func (node *Node) Take(cache *MatchCache, sortcolumn SortColumn, direction gtk.S
 				entryname := entry.name
 				entrypath := entry.path
 
-				matchedname := false
-				matchedpath := false
+				var matchedname, knownname, matchedpath, knownpath bool
 				if query != nil {
-					var knownname, knownpath bool
-					matchedname, knownname = (*namecache)[entryname]
-					matchedpath, knownpath = (*pathcache)[entrypath]
+					matchedname, knownname = namecache.Test(entryname)
+					matchedpath, knownpath = pathcache.Test(entrypath)
 
 					if !matchedname && !matchedpath {
 						if !knownname {
 							matchedname = query.MatchString(entryname)
-							(*namecache)[entryname] = matchedname
+							namecache.Put(entryname, matchedname)
 						}
 						if !knownpath && !matchedname {
 							matchedpath = query.MatchString(entrypath)
-							(*pathcache)[entrypath] = matchedpath
+							pathcache.Put(entrypath, matchedpath)
 						}
 					}
 				}
@@ -379,28 +391,28 @@ func WalkEntries(bucket Bucket, direction gtk.SortType, f func(entry *FileEntry)
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
-	node.mutex.Lock()
+	node.queuemutex.Lock()
 	for i := range node.children {
 		child := node.children[indexfunc(len(node.children), i)]
 		if len(child.(*Node).children) > 0 {
-			node.mutex.Unlock()
+			node.queuemutex.Unlock()
 			if !WalkEntries(child, direction, f) {
 				return false
 			}
-			node.mutex.Lock()
+			node.queuemutex.Lock()
 		} else {
 			sorted := child.(*Node).sorted
 			for j := range sorted {
 				entry := sorted[indexfunc(len(sorted), j)]
 				if !f(entry) {
-					node.mutex.Unlock()
+					node.queuemutex.Unlock()
 					return false
 				}
 			}
 		}
 	}
 
-	node.mutex.Unlock()
+	node.queuemutex.Unlock()
 	return true
 }
 
@@ -415,24 +427,24 @@ func WalkNodes(bucket Bucket, direction gtk.SortType, f func(bucket Bucket) bool
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
-	node.mutex.Lock()
+	node.queuemutex.Lock()
 	for i := range node.children {
 		child := node.children[indexfunc(len(node.children), i)]
 		if len(child.Node().children) > 0 {
-			node.mutex.Unlock()
+			node.queuemutex.Unlock()
 			if !WalkNodes(child, direction, f) {
 				return false
 			}
-			node.mutex.Lock()
+			node.queuemutex.Lock()
 		} else {
 			if !f(child) {
-				node.mutex.Unlock()
+				node.queuemutex.Unlock()
 				return false
 			}
 		}
 	}
 
-	node.mutex.Unlock()
+	node.queuemutex.Unlock()
 	return true
 }
 
@@ -463,15 +475,16 @@ func Insert(sortcolumn SortColumn, bucket Bucket, first int, files []*FileEntry)
 	node.lastchange = time.Now()
 
 	i := first
+childrenloop:
 	for _, child := range node.children {
 		childnode := child.Node()
 
-		childnode.mutex.Lock()
+		childnode.queuemutex.Lock()
 		for i < len(files) && child.Less(files[i]) {
 			if len(childnode.children) > 0 {
-				//childnode.mutex.Unlock()
+				//childnode.queuemutex.Unlock()
 				i = Insert(sortcolumn, child, i, files)
-				//childnode.mutex.Lock()
+				//childnode.queuemutex.Lock()
 			} else {
 				childnode.lastchange = time.Now()
 				childnode.queue = append(childnode.queue, files[i])
@@ -480,12 +493,14 @@ func Insert(sortcolumn SortColumn, bucket Bucket, first int, files []*FileEntry)
 		}
 
 		if len(childnode.queue) >= 100000 {
+			childnode.sortedmutex.Lock()
 			Split(sortcolumn, child, 10)
+			childnode.sortedmutex.Unlock()
 		}
-		childnode.mutex.Unlock()
+		childnode.queuemutex.Unlock()
 
 		if i >= len(files) {
-			break
+			break childrenloop
 		}
 	}
 
