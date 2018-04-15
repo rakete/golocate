@@ -496,6 +496,11 @@ func Print(bucket Bucket, level int) {
 	}
 }
 
+const (
+	SPLIT_ENTRYTHRESHOLD int = 10000
+	SPLIT_NUMPARTS       int = 10
+)
+
 func Insert(sortcolumn SortColumn, bucket Bucket, first int, files []*FileEntry) int {
 	node := bucket.Node()
 	node.lastchange = time.Now()
@@ -518,9 +523,9 @@ childrenloop:
 			}
 		}
 
-		if len(childnode.queue) >= 100000 {
+		if len(childnode.queue) >= SPLIT_ENTRYTHRESHOLD {
 			childnode.sortedmutex.Lock()
-			Split(sortcolumn, child, 10)
+			Split(sortcolumn, child, SPLIT_NUMPARTS)
 			childnode.sortedmutex.Unlock()
 		}
 		childnode.queuemutex.Unlock()
