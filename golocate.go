@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"runtime"
 	"sync"
+	//"syscall"
 	"time"
 
 	"github.com/gotk3/gotk3/glib"
@@ -183,29 +184,11 @@ func updateList(cache MatchCaches, bucket Bucket, liststore *gtk.ListStore, sort
 		return
 	}
 
-	taken := make(chan *FileEntry)
-	var entries []*FileEntry
-	aborttake := make(chan struct{})
-	aborted := false
-	go func() {
-		for {
-			select {
-			case <-abort:
-				entries = nil
-				aborted = true
-				close(aborttake)
-				return
-			case entry := <-taken:
-				if entry == nil {
-					return
-				}
-				entries = append(entries, entry)
-			}
-		}
-	}()
-	bucket.Node().Take(cache, sortcolumn, direction, query, n, aborttake, taken)
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	if !aborted {
+	display := func(entries []*FileEntry) {
+		wg.Add(1)
 		log.Println("displaying", len(entries), "entries")
 		glib.IdleAdd(func() {
 			if len(entries) < n {
@@ -226,8 +209,39 @@ func updateList(cache MatchCaches, bucket Bucket, liststore *gtk.ListStore, sort
 					i += 1
 				}
 			}
+			wg.Done()
 		})
 	}
+
+	taken := make(chan *FileEntry)
+	var batch []*FileEntry
+	aborttake := make(chan struct{})
+
+	go func() {
+	gofor:
+		for {
+			select {
+			case <-abort:
+				close(aborttake)
+				break gofor
+			case entry := <-taken:
+				if entry == nil {
+					close(aborttake)
+					break gofor
+				}
+				batch = append(batch, entry)
+			case <-time.After(1 * time.Second):
+				if (n > 10 && len(batch) > 10) || len(batch) > 0 {
+					display(batch)
+				}
+			}
+		}
+		display(batch)
+	}()
+	bucket.Node().Take(cache, sortcolumn, direction, query, n, aborttake, taken)
+	wg.Done()
+
+	wg.Wait()
 }
 
 type View struct {
@@ -277,6 +291,9 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 				currentsort = newsort
 				currentdirection = DEFAULT_DIRECTION
 			}
+			// close(abort)
+			// <-abort
+			// abort = make(chan struct{})
 			lastpoll = time.Unix(0, 0)
 		case <-time.After(1 * time.Second):
 		}
