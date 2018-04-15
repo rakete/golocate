@@ -43,9 +43,9 @@ func TestFileEntries(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	searchterm := "golocate"
+	searchterm := ".*\\.cc$"
 	query, _ := regexp.Compile(searchterm)
-	cache := MatchCaches{NewSyncCache(), NewSyncCache()}
+	cache := MatchCaches{NewSimpleCache(), NewSimpleCache()}
 	abort := make(chan struct{})
 	taken := make(chan *FileEntry)
 
@@ -106,7 +106,7 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		wg.Wait()
 		close(finish)
 
-		cache := MatchCaches{NewSyncCache(), NewSyncCache()}
+		cache := MatchCaches{NewSimpleCache(), NewSimpleCache()}
 		abort := make(chan struct{})
 		taken := make(chan *FileEntry)
 
@@ -151,7 +151,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		wg.Wait()
 		close(finish)
 
-		cache := MatchCaches{NewSyncCache(), NewSyncCache()}
+		cache := MatchCaches{NewSimpleCache(), NewSimpleCache()}
 		abort := make(chan struct{})
 		taken := make(chan *FileEntry)
 

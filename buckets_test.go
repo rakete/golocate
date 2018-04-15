@@ -48,9 +48,9 @@ func TestBuckets(t *testing.T) {
 	close(finish)
 	log.Println("Crawl terminated")
 
-	searchterm := "golocate"
+	searchterm := ".*\\.cc$"
 	query, _ := regexp.Compile(searchterm)
-	cache := MatchCaches{NewSyncCache(), NewSyncCache()}
+	cache := MatchCaches{NewSimpleCache(), NewSimpleCache()}
 	abort := make(chan struct{})
 	taken := make(chan *FileEntry)
 
@@ -319,7 +319,7 @@ func BenchmarkTake(b *testing.B) {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	directories := []string{path.Join(os.Getenv("GOPATH"))}
+	directories := []string{path.Join(os.Getenv("GOPATH")), "/tmp", "/etc", "/usr"}
 	newdirs := make(chan string)
 
 	cores := runtime.NumCPU()
@@ -349,7 +349,7 @@ func BenchmarkTake(b *testing.B) {
 	abort := make(chan struct{})
 	taken := make(chan *FileEntry)
 
-	var byname []*FileEntry
+	var entries []*FileEntry
 	taker := func(xs *[]*FileEntry) {
 		for {
 			entry := <-taken
@@ -368,19 +368,19 @@ func BenchmarkTake(b *testing.B) {
 		query     *regexp.Regexp
 		n         int
 	}{
-		{"SliceName", memslice.byname, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 10000},
-		{"SliceModTime", memslice.bymodtime, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 10000},
-		{"SliceSize", memslice.bysize, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 10000},
-		{"BucketName", membuckets.byname, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 10000},
-		{"BucketModTime", membuckets.bymodtime, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 10000},
-		{"BucketSize", membuckets.bysize, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 10000},
+		{"SliceName", memslice.byname, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 100},
+		{"SliceModTime", memslice.bymodtime, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 100},
+		{"SliceSize", memslice.bysize, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 100},
+		{"BucketName", membuckets.byname, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 100},
+		{"BucketModTime", membuckets.bymodtime, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 100},
+		{"BucketSize", membuckets.bysize, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 100},
 	}
 
 	for _, bm := range benchmarks {
+		cache := MatchCaches{NewSimpleCache(), NewSimpleCache()}
 		b.Run(bm.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				cache := MatchCaches{NewSyncCache(), NewSyncCache()}
-				go taker(&byname)
+				go taker(&entries)
 				bm.mem.Take(cache, bm.sorting, bm.direction, bm.query, bm.n, abort, taken)
 			}
 		})

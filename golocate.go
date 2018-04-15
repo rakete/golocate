@@ -246,7 +246,7 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 	n := inc
 	abort := make(chan struct{})
 	finish := make(chan struct{}, 1)
-	cache := MatchCaches{new(SyncCache), new(SyncCache)}
+	cache := MatchCaches{NewSimpleCache(), NewSimpleCache()}
 
 	for {
 		select {
@@ -259,7 +259,7 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 		case searchterm := <-view.searchterm:
 			query, err := regexp.Compile(searchterm)
 			if err == nil {
-				cache = MatchCaches{new(SyncCache), new(SyncCache)}
+				cache = MatchCaches{NewSimpleCache(), NewSimpleCache()}
 				currentquery = query
 				close(abort)
 				<-abort
