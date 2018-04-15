@@ -179,6 +179,45 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	}
 }
 
+func instantSearch(liststore *gtk.ListStore, query *regexp.Regexp) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	glib.IdleAdd(func() {
+		iter, valid := liststore.GetIterFirst()
+		for iter != nil && valid == true {
+
+			removed := false
+			namevalue, namelisterr := liststore.GetValue(iter, int(SORT_BY_NAME))
+			if namelisterr == nil {
+				namestring, namestringerr := namevalue.GetString()
+				if namestringerr == nil && !query.MatchString(namestring) {
+					pathvalue, pathlisterr := liststore.GetValue(iter, int(SORT_BY_PATH))
+					if pathlisterr == nil {
+						pathstring, pathstringerr := pathvalue.GetString()
+
+						if pathstringerr == nil && !query.MatchString(pathstring) {
+							liststore.Remove(iter)
+							removed = true
+						}
+					} else {
+						return
+					}
+				}
+			} else {
+				return
+			}
+
+			if !removed {
+				valid = liststore.IterNext(iter)
+			} else {
+				valid = liststore.IterIsValid(iter)
+			}
+		}
+		wg.Done()
+	})
+	wg.Wait()
+}
+
 func updateList(cache MatchCaches, bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}) {
 	if bucket == nil {
 		return
@@ -259,8 +298,8 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 	inc := 1000
 	n := inc
 	abort := make(chan struct{})
-	finish := make(chan struct{}, 1)
-	cache := MatchCaches{NewSimpleCache(), NewSimpleCache()}
+	maxupdate := make(chan struct{}, 1)
+	matchcaches := MatchCaches{NewSimpleCache(), NewSimpleCache()}
 
 	for {
 		select {
@@ -273,11 +312,14 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 		case searchterm := <-view.searchterm:
 			query, err := regexp.Compile(searchterm)
 			if err == nil {
-				cache = MatchCaches{NewSimpleCache(), NewSimpleCache()}
 				currentquery = query
+
 				close(abort)
 				<-abort
 				abort = make(chan struct{})
+
+				instantSearch(liststore, currentquery)
+				matchcaches = MatchCaches{NewSimpleCache(), NewSimpleCache()}
 				lastpoll = time.Unix(0, 0)
 			}
 		case newsort := <-view.sort:
@@ -309,12 +351,12 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 		}
 
 		if currentbucket.Node().lastchange.After(lastpoll) {
-			if len(finish) == 0 {
-				finish <- struct{}{}
+			if len(maxupdate) == 0 {
+				maxupdate <- struct{}{}
 				lastpoll = time.Now()
 				go func() {
-					updateList(cache, currentbucket, liststore, currentsort, currentdirection, currentquery, n, abort)
-					<-finish
+					updateList(matchcaches, currentbucket, liststore, currentsort, currentdirection, currentquery, n, abort)
+					<-maxupdate
 				}()
 			} else {
 				lastpoll = time.Unix(0, 0)
