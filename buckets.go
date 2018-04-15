@@ -225,29 +225,25 @@ func (node *Node) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.S
 	}
 
 	numresults := 0
-	aborted := false
 	var namecache, pathcache Cache
 	if cache.names != nil {
 		namecache = cache.names
 	} else {
-		empty := SimpleCache(map[string]bool{})
-		namecache = &empty
+		namecache = NewSimpleCache()
 	}
 
 	if cache.paths != nil {
 		pathcache = cache.paths
 	} else {
-		empty := SimpleCache(map[string]bool{})
-		pathcache = &empty
+		pathcache = NewSimpleCache()
 	}
 
-	// numcores := 8
-	// maxproc := make(chan struct{}, numcores)
-	// for i := 0; i < len(node.children); i++ {
-	// 	maxproc <- struct{}{}
-
-	// }
 	WalkNodes(node, direction, func(child Bucket) bool {
+		if child == nil {
+			results <- nil
+			return true
+		}
+
 		childnode := child.Node()
 
 		defer childnode.sortedmutex.Unlock()
@@ -261,7 +257,6 @@ func (node *Node) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.S
 		for i := 0; i < len(sorted); i++ {
 			select {
 			case <-abort:
-				aborted = true
 				return false
 			default:
 				index := indexfunc(l, i)
@@ -292,6 +287,7 @@ func (node *Node) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.S
 				}
 
 				if numresults >= n {
+					results <- nil
 					return false
 				}
 			}
@@ -299,10 +295,6 @@ func (node *Node) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.S
 
 		return true
 	})
-
-	if !aborted {
-		results <- nil
-	}
 }
 
 func (node *Node) NumFiles() int {
@@ -381,6 +373,10 @@ func (node *Node) Node() *Node {
 }
 
 func WalkEntries(bucket Bucket, direction gtk.SortType, f func(entry *FileEntry) bool) bool {
+	return WalkEntriesRecur(nil, bucket, direction, f)
+}
+
+func WalkEntriesRecur(parent Bucket, bucket Bucket, direction gtk.SortType, f func(entry *FileEntry) bool) bool {
 	node := bucket.Node()
 
 	var indexfunc func(int, int) int
@@ -392,60 +388,90 @@ func WalkEntries(bucket Bucket, direction gtk.SortType, f func(entry *FileEntry)
 	}
 
 	node.queuemutex.Lock()
-	for i := range node.children {
-		child := node.children[indexfunc(len(node.children), i)]
-		if len(child.(*Node).children) > 0 {
-			node.queuemutex.Unlock()
-			if !WalkEntries(child, direction, f) {
-				return false
-			}
-			node.queuemutex.Lock()
-		} else {
-			sorted := child.(*Node).sorted
-			for j := range sorted {
-				entry := sorted[indexfunc(len(sorted), j)]
-				if !f(entry) {
-					node.queuemutex.Unlock()
+	if len(node.children) > 0 {
+		for i := range node.children {
+			child := node.children[indexfunc(len(node.children), i)]
+			if len(child.(*Node).children) > 0 {
+				node.queuemutex.Unlock()
+				if !WalkEntriesRecur(node, child, direction, f) {
 					return false
+				}
+				node.queuemutex.Lock()
+			} else {
+				sorted := child.(*Node).sorted
+				for j := range sorted {
+					entry := sorted[indexfunc(len(sorted), j)]
+					if !f(entry) {
+						node.queuemutex.Unlock()
+						return false
+					}
 				}
 			}
 		}
-	}
-
-	node.queuemutex.Unlock()
-	return true
-}
-
-func WalkNodes(bucket Bucket, direction gtk.SortType, f func(bucket Bucket) bool) bool {
-	node := bucket.Node()
-
-	var indexfunc func(int, int) int
-	switch direction {
-	case gtk.SORT_ASCENDING:
-		indexfunc = func(l, i int) int { return i }
-	case gtk.SORT_DESCENDING:
-		indexfunc = func(l, j int) int { return l - 1 - j }
-	}
-
-	node.queuemutex.Lock()
-	for i := range node.children {
-		child := node.children[indexfunc(len(node.children), i)]
-		if len(child.Node().children) > 0 {
-			node.queuemutex.Unlock()
-			if !WalkNodes(child, direction, f) {
-				return false
-			}
-			node.queuemutex.Lock()
-		} else {
-			if !f(child) {
+	} else {
+		sorted := node.sorted
+		for j := range sorted {
+			entry := sorted[indexfunc(len(sorted), j)]
+			if !f(entry) {
 				node.queuemutex.Unlock()
 				return false
 			}
 		}
 	}
 
+	ret := true
+	if parent == nil {
+		ret = f(nil)
+	}
 	node.queuemutex.Unlock()
-	return true
+	return ret
+}
+
+func WalkNodes(bucket Bucket, direction gtk.SortType, f func(bucket Bucket) bool) bool {
+	return WalkNodesRecur(nil, bucket, direction, f)
+}
+
+func WalkNodesRecur(parent Bucket, bucket Bucket, direction gtk.SortType, f func(bucket Bucket) bool) bool {
+	node := bucket.Node()
+
+	var indexfunc func(int, int) int
+	switch direction {
+	case gtk.SORT_ASCENDING:
+		indexfunc = func(l, i int) int { return i }
+	case gtk.SORT_DESCENDING:
+		indexfunc = func(l, j int) int { return l - 1 - j }
+	}
+
+	node.queuemutex.Lock()
+	if len(node.children) > 0 {
+		for i := range node.children {
+			child := node.children[indexfunc(len(node.children), i)]
+			if len(child.Node().children) > 0 {
+				node.queuemutex.Unlock()
+				if !WalkNodesRecur(node, child, direction, f) {
+					return false
+				}
+				node.queuemutex.Lock()
+			} else {
+				if !f(child) {
+					node.queuemutex.Unlock()
+					return false
+				}
+			}
+		}
+	} else {
+		if !f(node) {
+			node.queuemutex.Unlock()
+			return false
+		}
+	}
+
+	ret := true
+	if parent == nil {
+		ret = f(nil)
+	}
+	node.queuemutex.Unlock()
+	return ret
 }
 
 func Print(bucket Bucket, level int) {

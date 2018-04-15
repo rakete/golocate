@@ -85,6 +85,10 @@ func TestBuckets(t *testing.T) {
 
 	var lastentry *FileEntry
 	WalkEntries(mem.bymodtime.(*Node), gtk.SORT_ASCENDING, func(entry *FileEntry) bool {
+		if entry == nil {
+			return true
+		}
+
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -100,6 +104,10 @@ func TestBuckets(t *testing.T) {
 
 	lastentry = nil
 	WalkEntries(mem.bymodtime.(*Node), gtk.SORT_DESCENDING, func(entry *FileEntry) bool {
+		if entry == nil {
+			return true
+		}
+
 		if lastentry == nil {
 			lastentry = entry
 			return true
@@ -114,6 +122,10 @@ func TestBuckets(t *testing.T) {
 	})
 
 	WalkNodes(mem.bysize.(*Node), gtk.SORT_ASCENDING, func(child Bucket) bool {
+		if child == nil {
+			return true
+		}
+
 		node := child.Node()
 
 		if !sort.IsSorted(SortedBySize(node.sorted)) {
@@ -205,6 +217,10 @@ func BenchmarkRegexpBuiltin(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		WalkEntries(mem.bymodtime.(*Node), gtk.SORT_ASCENDING, func(entry *FileEntry) bool {
+			if entry == nil {
+				return true
+			}
+
 			query1.MatchString(entry.name)
 			query1.MatchString(entry.path)
 
@@ -265,6 +281,10 @@ func BenchmarkRegexpPCRE(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		WalkEntries(mem.bymodtime.(*Node), gtk.SORT_ASCENDING, func(entry *FileEntry) bool {
+			if entry == nil {
+				return true
+			}
+
 			namematcher1 := pcrere1.MatcherString(entry.name, 0)
 			namematcher1.Matches()
 			pathmatcher1 := pcrere1.MatcherString(entry.path, 0)
