@@ -102,11 +102,11 @@ func (entries *FileEntries) Take(cache MatchCaches, sortcolumn SortColumn, direc
 
 	switch sortcolumn {
 	case SORT_BY_NAME:
-		entries.queue = sortFileEntries(SortedByName(entries.queue)).(SortedByName)
+		entries.queue = sortStable(SortedByName(entries.queue)).(SortedByName)
 	case SORT_BY_MODTIME:
-		entries.queue = sortFileEntries(SortedByModTime(entries.queue)).(SortedByModTime)
+		entries.queue = sortStable(SortedByModTime(entries.queue)).(SortedByModTime)
 	case SORT_BY_SIZE:
-		entries.queue = sortFileEntries(SortedBySize(entries.queue)).(SortedBySize)
+		entries.queue = sortStable(SortedBySize(entries.queue)).(SortedBySize)
 	}
 	entries.sorted = sortMerge(sortcolumn, entries.sorted, entries.queue)
 	entries.queue = nil
@@ -259,7 +259,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 				newbyname := make([]*FileEntry, len(files))
 				copy(newbyname, files)
 
-				newbyname = sortFileEntries(SortedByName(newbyname)).(SortedByName)
+				newbyname = sortStable(SortedByName(newbyname)).(SortedByName)
 				mem.byname.Merge(SORT_BY_NAME, newbyname)
 
 				wg.Done()
@@ -276,7 +276,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 				newbymodtime := make([]*FileEntry, len(files))
 				copy(newbymodtime, files)
 
-				newbymodtime = sortFileEntries(SortedByModTime(newbymodtime)).(SortedByModTime)
+				newbymodtime = sortStable(SortedByModTime(newbymodtime)).(SortedByModTime)
 				mem.bymodtime.Merge(SORT_BY_MODTIME, newbymodtime)
 
 				wg.Done()
@@ -293,7 +293,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 				newbysize := make([]*FileEntry, len(files))
 				copy(newbysize, files)
 
-				newbysize = sortFileEntries(SortedBySize(newbysize)).(SortedBySize)
+				newbysize = sortStable(SortedBySize(newbysize)).(SortedBySize)
 				mem.bysize.Merge(SORT_BY_SIZE, newbysize)
 
 				wg.Done()

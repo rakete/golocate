@@ -37,7 +37,7 @@ func (a SortedBySize) Less(i, j int) bool {
 	return a[i].size > a[j].size
 }
 
-func sortFileEntries(files sort.Interface) sort.Interface {
+func sortStable(files sort.Interface) sort.Interface {
 	sort.Stable(files)
 	return files
 }

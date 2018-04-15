@@ -326,11 +326,11 @@ func (node *Node) Sort(sortcolumn SortColumn) {
 	if len(node.queue) > 0 {
 		switch sortcolumn {
 		case SORT_BY_NAME:
-			node.queue = sortFileEntries(SortedByName(node.queue)).(SortedByName)
+			node.queue = sortStable(SortedByName(node.queue)).(SortedByName)
 		case SORT_BY_MODTIME:
-			node.queue = sortFileEntries(SortedByModTime(node.queue)).(SortedByModTime)
+			node.queue = sortStable(SortedByModTime(node.queue)).(SortedByModTime)
 		case SORT_BY_SIZE:
-			node.queue = sortFileEntries(SortedBySize(node.queue)).(SortedBySize)
+			node.queue = sortStable(SortedBySize(node.queue)).(SortedBySize)
 		}
 		node.sorted = sortMerge(sortcolumn, node.sorted, node.queue)
 		node.queue = nil

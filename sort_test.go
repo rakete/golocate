@@ -44,17 +44,17 @@ func getDirectoryFiles(dirs []string) []*FileEntry {
 func TestSort(t *testing.T) {
 	files := getDirectoryFiles([]string{"/tmp"})
 
-	byname := sortFileEntries(SortedByName(files))
+	byname := sortStable(SortedByName(files))
 	if !sort.IsSorted(byname) {
 		t.Error("Not sorted by name!")
 	}
 
-	bymodtime := sortFileEntries(SortedByModTime(files))
+	bymodtime := sortStable(SortedByModTime(files))
 	if !sort.IsSorted(bymodtime) {
 		t.Error("Not sorted by modtime!")
 	}
 
-	bysize := sortFileEntries(SortedBySize(files))
+	bysize := sortStable(SortedBySize(files))
 	if !sort.IsSorted(bysize) {
 		t.Error("Not sorted by size!")
 	}
@@ -69,7 +69,7 @@ func BenchmarkSortedByName(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(SortedByName(files))
+		sortStable(SortedByName(files))
 	}
 }
 
@@ -80,7 +80,7 @@ func BenchmarkSortedByModTime(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(SortedByModTime(files))
+		sortStable(SortedByModTime(files))
 	}
 }
 
@@ -91,7 +91,7 @@ func BenchmarkSortedBySize(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		sortFileEntries(SortedBySize(files))
+		sortStable(SortedBySize(files))
 	}
 }
 
@@ -110,21 +110,21 @@ func TestSortMerge(t *testing.T) {
 
 		bynamefiles := make([]*FileEntry, len(files))
 		copy(bynamefiles, files)
-		byname = sortMerge(SORT_BY_NAME, byname, sortFileEntries(SortedByName(bynamefiles)).(SortedByName))
+		byname = sortMerge(SORT_BY_NAME, byname, sortStable(SortedByName(bynamefiles)).(SortedByName))
 		if len(byname) < len(allfiles) {
 			t.Error("Result of sortMerge for SORT_BY_NAME contains less entries then its input", len(byname), len(allfiles))
 		}
 
 		bymodtimefiles := make([]*FileEntry, len(files))
 		copy(bymodtimefiles, files)
-		bymodtime = sortMerge(SORT_BY_MODTIME, bymodtime, sortFileEntries(SortedByModTime(bymodtimefiles)).(SortedByModTime))
+		bymodtime = sortMerge(SORT_BY_MODTIME, bymodtime, sortStable(SortedByModTime(bymodtimefiles)).(SortedByModTime))
 		if len(bymodtime) < len(allfiles) {
 			t.Error("Result of sortMerge for SORT_BY_MODTIME contains less entries then its input", len(bymodtime), len(allfiles))
 		}
 
 		bysizefiles := make([]*FileEntry, len(files))
 		copy(bysizefiles, files)
-		bysize = sortMerge(SORT_BY_SIZE, bysize, sortFileEntries(SortedBySize(bysizefiles)).(SortedBySize))
+		bysize = sortMerge(SORT_BY_SIZE, bysize, sortStable(SortedBySize(bysizefiles)).(SortedBySize))
 		if len(bysize) < len(allfiles) {
 			t.Error("Result of sortMerge for SORT_BY_SIZE contains less entries then its input", len(bysize), len(allfiles))
 		}
@@ -168,7 +168,7 @@ func BenchmarkSortMergeByName(b *testing.B) {
 	var cache [][]*FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles([]string{dir})
-		cache = append(cache, sortFileEntries(SortedByName(files)).(SortedByName))
+		cache = append(cache, sortStable(SortedByName(files)).(SortedByName))
 	}
 
 	b.StartTimer()
@@ -193,7 +193,7 @@ func BenchmarkSortMergeByModTime(b *testing.B) {
 	var cache [][]*FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles([]string{dir})
-		cache = append(cache, sortFileEntries(SortedByModTime(files)).(SortedByModTime))
+		cache = append(cache, sortStable(SortedByModTime(files)).(SortedByModTime))
 	}
 
 	b.StartTimer()
@@ -218,7 +218,7 @@ func BenchmarkSortMergeBySize(b *testing.B) {
 	var cache [][]*FileEntry
 	for _, dir := range directories {
 		files := getDirectoryFiles([]string{dir})
-		cache = append(cache, sortFileEntries(SortedBySize(files)).(SortedBySize))
+		cache = append(cache, sortStable(SortedBySize(files)).(SortedBySize))
 	}
 
 	b.StartTimer()
