@@ -8,33 +8,33 @@ type SortColumn int
 
 const (
 	SORT_BY_NAME SortColumn = iota
-	SORT_BY_PATH
+	SORT_BY_DIR
 	SORT_BY_MODTIME
 	SORT_BY_SIZE
 )
 
 type SortedByName []*FileEntry
 
-func (a SortedByName) Len() int      { return len(a) }
-func (a SortedByName) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a SortedByName) Less(i, j int) bool {
-	return a[i].name < a[j].name
+func (entries SortedByName) Len() int      { return len(entries) }
+func (entries SortedByName) Swap(i, j int) { entries[i], entries[j] = entries[j], entries[i] }
+func (entries SortedByName) Less(i, j int) bool {
+	return entries[i].name < entries[j].name
 }
 
 type SortedByModTime []*FileEntry
 
-func (a SortedByModTime) Len() int      { return len(a) }
-func (a SortedByModTime) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a SortedByModTime) Less(i, j int) bool {
-	return a[i].modtime.After(a[j].modtime)
+func (entries SortedByModTime) Len() int      { return len(entries) }
+func (entries SortedByModTime) Swap(i, j int) { entries[i], entries[j] = entries[j], entries[i] }
+func (entries SortedByModTime) Less(i, j int) bool {
+	return entries[i].modtime.After(entries[j].modtime)
 }
 
 type SortedBySize []*FileEntry
 
-func (a SortedBySize) Len() int      { return len(a) }
-func (a SortedBySize) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a SortedBySize) Less(i, j int) bool {
-	return a[i].size > a[j].size
+func (entries SortedBySize) Len() int      { return len(entries) }
+func (entries SortedBySize) Swap(i, j int) { entries[i], entries[j] = entries[j], entries[i] }
+func (entries SortedBySize) Less(i, j int) bool {
+	return entries[i].size > entries[j].size
 }
 
 func sortStable(files sort.Interface) sort.Interface {

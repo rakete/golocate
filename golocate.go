@@ -8,10 +8,11 @@ import (
 	"runtime"
 	"sync"
 	//"syscall"
+	"sort"
 	"time"
 
-	"github.com/gotk3/gotk3/glib"
-	"github.com/gotk3/gotk3/gtk"
+	glib "github.com/gotk3/gotk3/glib"
+	gtk "github.com/gotk3/gotk3/gtk"
 )
 
 const (
@@ -45,7 +46,7 @@ func createColumn(title string, id SortColumn) *gtk.TreeViewColumn {
 	case SORT_BY_NAME:
 		column.SetFixedWidth(500)
 		column.SetMinWidth(60)
-	case SORT_BY_PATH:
+	case SORT_BY_DIR:
 		column.SetFixedWidth(800)
 		column.SetMinWidth(60)
 	case SORT_BY_MODTIME:
@@ -66,7 +67,7 @@ func setupTreeView() (*gtk.TreeView, *gtk.ListStore) {
 	}
 
 	treeview.AppendColumn(createColumn("Name", SORT_BY_NAME))
-	treeview.AppendColumn(createColumn("Path", SORT_BY_PATH))
+	treeview.AppendColumn(createColumn("Path", SORT_BY_DIR))
 	treeview.AppendColumn(createColumn("Size", SORT_BY_SIZE))
 	treeview.AppendColumn(createColumn("Modification Time", SORT_BY_MODTIME))
 
@@ -154,8 +155,8 @@ func addEntry(liststore *gtk.ListStore, entry *FileEntry) gtk.TreeIter {
 
 	var iter gtk.TreeIter
 	err := liststore.InsertWithValues(&iter, -1,
-		[]int{int(SORT_BY_NAME), int(SORT_BY_PATH), int(SORT_BY_SIZE), int(SORT_BY_MODTIME)},
-		[]interface{}{entry.name, entry.path, sizestring, modtimestring})
+		[]int{int(SORT_BY_NAME), int(SORT_BY_DIR), int(SORT_BY_SIZE), int(SORT_BY_MODTIME)},
+		[]interface{}{entry.name, entry.dir, sizestring, modtimestring})
 
 	if err != nil {
 		log.Fatal("Unable to add row:", err)
@@ -171,54 +172,111 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	modtimestring := modtime.Format("2006-01-02 15:04:05")
 
 	err := liststore.Set(iter,
-		[]int{int(SORT_BY_NAME), int(SORT_BY_PATH), int(SORT_BY_SIZE), int(SORT_BY_MODTIME)},
-		[]interface{}{entry.name, entry.path, sizestring, modtimestring})
+		[]int{int(SORT_BY_NAME), int(SORT_BY_DIR), int(SORT_BY_SIZE), int(SORT_BY_MODTIME)},
+		[]interface{}{entry.name, entry.dir, sizestring, modtimestring})
 
 	if err != nil {
 		log.Fatal("Unable to update row:", err)
 	}
 }
 
-func instantSearch(liststore *gtk.ListStore, query *regexp.Regexp) {
+func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, newsort SortColumn, newdirection gtk.SortType, n int) {
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	glib.IdleAdd(func() {
-		iter, valid := liststore.GetIterFirst()
-		for iter != nil && valid == true {
 
-			removed := false
-			namevalue, namelisterr := liststore.GetValue(iter, int(SORT_BY_NAME))
-			if namelisterr == nil {
-				namestring, namestringerr := namevalue.GetString()
-				if namestringerr == nil && !query.MatchString(namestring) {
-					pathvalue, pathlisterr := liststore.GetValue(iter, int(SORT_BY_PATH))
-					if pathlisterr == nil {
-						pathstring, pathstringerr := pathvalue.GetString()
+		listlength := list.store.IterNChildren(nil)
+		if listlength < n {
 
-						if pathstringerr == nil && !query.MatchString(pathstring) {
-							liststore.Remove(iter)
-							removed = true
-						}
-					} else {
-						return
-					}
+			list.mutex.Lock()
+
+			if oldsort != newsort {
+				switch newsort {
+				case SORT_BY_NAME:
+					sort.Stable(SortedByName(list.entries))
+				case SORT_BY_DIR:
+				case SORT_BY_MODTIME:
+					sort.Stable(SortedByModTime(list.entries))
+				case SORT_BY_SIZE:
+					sort.Stable(SortedBySize(list.entries))
 				}
-			} else {
-				return
+			} else if olddirection != newdirection {
+				for i := len(list.entries)/2 - 1; i >= 0; i-- {
+					opp := len(list.entries) - 1 - i
+					list.entries[i], list.entries[opp] = list.entries[opp], list.entries[i]
+				}
 			}
 
-			if !removed {
-				valid = liststore.IterNext(iter)
-			} else {
-				valid = liststore.IterIsValid(iter)
+			i := 0
+			iter, valid := list.store.GetIterFirst()
+			for valid == true && i < len(list.entries) {
+				updateEntry(iter, list.store, list.entries[i])
+				valid = list.store.IterNext(iter)
+				i += 1
 			}
+
+			list.mutex.Unlock()
 		}
+
 		wg.Done()
 	})
 	wg.Wait()
 }
 
-func updateList(cache MatchCaches, bucket Bucket, liststore *gtk.ListStore, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}) {
+func instantSearch(list *ViewList, query *regexp.Regexp) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	glib.IdleAdd(func() {
+		list.mutex.Lock()
+
+		i := 0
+		var newentries []*FileEntry
+		iter, valid := list.store.GetIterFirst()
+		for iter != nil && valid == true {
+
+			// namevalue, namelisterr := list.store.GetValue(iter, int(SORT_BY_NAME))
+			// if namelisterr == nil {
+			// 	namestring, namestringerr := namevalue.GetString()
+			// 	if namestringerr == nil && !query.MatchString(namestring) {
+			// 		dirvalue, dirlisterr := list.store.GetValue(iter, int(SORT_BY_DIR))
+			// 		if dirlisterr == nil {
+			// 			dirstring, dirstringerr := dirvalue.GetString()
+
+			// 			if dirstringerr == nil && !query.MatchString(dirstring) {
+			// 				list.store.Remove(iter)
+			// 				removed = true
+			// 			}
+			// 		} else {
+			// 			return
+			// 		}
+			// 	}
+			// } else {
+			// 	return
+			// }
+
+			if !query.MatchString(list.entries[i].name) && !query.MatchString(list.entries[i].dir) {
+				list.store.Remove(iter)
+				valid = list.store.IterIsValid(iter)
+			} else {
+				newentries = append(newentries, list.entries[i])
+				valid = list.store.IterNext(iter)
+			}
+
+			i += 1
+		}
+
+		list.entries = make([]*FileEntry, len(newentries))
+		copy(list.entries, newentries)
+
+		list.mutex.Unlock()
+
+		wg.Done()
+	})
+	wg.Wait()
+}
+
+func updateList(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}) {
 	if bucket == nil {
 		return
 	}
@@ -226,28 +284,36 @@ func updateList(cache MatchCaches, bucket Bucket, liststore *gtk.ListStore, sort
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	display := func(entries []*FileEntry) {
+	display := func(newentries []*FileEntry) {
 		wg.Add(1)
-		log.Println("displaying", len(entries), "entries")
 		glib.IdleAdd(func() {
-			if len(entries) < n {
-				liststore.Clear()
-			}
+			list.mutex.Lock()
+			log.Println("displaying", len(newentries), "entries")
 
 			i := 0
-			iter, valid := liststore.GetIterFirst()
-			for i < len(entries) && valid == true {
-				updateEntry(iter, liststore, entries[i])
-				valid = liststore.IterNext(iter)
+			iter, valid := list.store.GetIterFirst()
+			for i < len(newentries) && valid == true {
+				updateEntry(iter, list.store, newentries[i])
+				valid = list.store.IterNext(iter)
 				i += 1
 			}
 
-			if i < len(entries) {
-				for _, entry := range entries[i:] {
-					addEntry(liststore, entry)
+			if i < len(newentries) {
+				for _, newentry := range newentries[i:] {
+					addEntry(list.store, newentry)
 					i += 1
 				}
+			} else {
+				for valid == true {
+					list.store.Remove(iter)
+					valid = list.store.IterIsValid(iter)
+				}
 			}
+
+			list.entries = make([]*FileEntry, len(newentries))
+			copy(list.entries, newentries)
+			list.mutex.Unlock()
+
 			wg.Done()
 		})
 	}
@@ -257,25 +323,24 @@ func updateList(cache MatchCaches, bucket Bucket, liststore *gtk.ListStore, sort
 	aborttake := make(chan struct{})
 
 	go func() {
-	gofor:
 		for {
 			select {
 			case <-abort:
 				close(aborttake)
-				break gofor
+				return
 			case entry := <-taken:
 				if entry == nil {
 					close(aborttake)
-					break gofor
+					display(batch)
+					return
 				}
 				batch = append(batch, entry)
-			case <-time.After(1 * time.Second):
+			case <-time.After(1000 * time.Millisecond):
 				if (n > 10 && len(batch) > 10) || len(batch) > 0 {
 					display(batch)
 				}
 			}
 		}
-		display(batch)
 	}()
 	bucket.Node().Take(cache, sortcolumn, direction, query, n, aborttake, taken)
 	wg.Done()
@@ -283,14 +348,25 @@ func updateList(cache MatchCaches, bucket Bucket, liststore *gtk.ListStore, sort
 	wg.Wait()
 }
 
+type ViewList struct {
+	store   *gtk.ListStore
+	entries []*FileEntry
+	mutex   *sync.Mutex
+}
+
+type ViewSort struct {
+	column    SortColumn
+	direction gtk.SortType
+}
+
 type View struct {
-	sort       chan SortColumn
+	sort       chan ViewSort
 	more       chan struct{}
 	reset      chan struct{}
 	searchterm chan string
 }
 
-func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
+func Controller(list *ViewList, mem ResultMemory, view View) {
 	currentsort := DEFAULT_SORT
 	currentdirection := DEFAULT_DIRECTION
 	var currentquery *regexp.Regexp
@@ -298,7 +374,7 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 	inc := 1000
 	n := inc
 	abort := make(chan struct{})
-	maxupdate := make(chan struct{}, 1)
+	maxproc := make(chan struct{}, 1)
 	matchcaches := MatchCaches{NewSimpleCache(), NewSimpleCache()}
 
 	for {
@@ -318,26 +394,25 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 				<-abort
 				abort = make(chan struct{})
 
-				instantSearch(liststore, currentquery)
+				instantSearch(list, currentquery)
 				matchcaches = MatchCaches{NewSimpleCache(), NewSimpleCache()}
 				lastpoll = time.Unix(0, 0)
 			}
 		case newsort := <-view.sort:
-			if currentsort == newsort {
-				if currentdirection == OPPOSITE_DIRECTION {
-					currentdirection = DEFAULT_DIRECTION
-				} else {
-					currentdirection = OPPOSITE_DIRECTION
-				}
-			} else {
-				currentsort = newsort
-				currentdirection = DEFAULT_DIRECTION
+			if newsort.column != currentsort || newsort.direction != currentdirection {
+				oldsort := currentsort
+				olddirection := currentdirection
+				currentsort = newsort.column
+				currentdirection = newsort.direction
+
+				close(abort)
+				<-abort
+				abort = make(chan struct{})
+
+				instantSort(list, oldsort, olddirection, currentsort, currentdirection, n)
+				lastpoll = time.Unix(0, 0)
 			}
-			// close(abort)
-			// <-abort
-			// abort = make(chan struct{})
-			lastpoll = time.Unix(0, 0)
-		case <-time.After(1 * time.Second):
+		case <-time.After(1000 * time.Millisecond):
 		}
 
 		var currentbucket Bucket
@@ -351,12 +426,12 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 		}
 
 		if currentbucket.Node().lastchange.After(lastpoll) {
-			if len(maxupdate) == 0 {
-				maxupdate <- struct{}{}
+			if len(maxproc) == 0 {
+				maxproc <- struct{}{}
 				lastpoll = time.Now()
 				go func() {
-					updateList(matchcaches, currentbucket, liststore, currentsort, currentdirection, currentquery, n, abort)
-					<-maxupdate
+					updateList(matchcaches, currentbucket, list, currentsort, currentdirection, currentquery, n, abort)
+					<-maxproc
 				}()
 			} else {
 				lastpoll = time.Unix(0, 0)
@@ -365,10 +440,8 @@ func Controller(liststore *gtk.ListStore, mem ResultMemory, view View) {
 	}
 }
 
-func createColumnSortToggle(treeview *gtk.TreeView, clickedcolumn int, sortcolumnchan chan SortColumn, sortcolumn SortColumn) func() {
+func createColumnSortToggle(treeview *gtk.TreeView, clickedcolumn int, viewsortchan chan ViewSort, sortcolumn SortColumn) func() {
 	return func() {
-		sortcolumnchan <- sortcolumn
-
 		for i := 0; i < int(treeview.GetNColumns()); i++ {
 			column := treeview.GetColumn(i)
 
@@ -376,16 +449,16 @@ func createColumnSortToggle(treeview *gtk.TreeView, clickedcolumn int, sortcolum
 				firstclick := !column.GetSortIndicator()
 
 				column.SetSortIndicator(true)
-				if firstclick {
-					column.SetSortOrder(DEFAULT_DIRECTION)
-				} else {
-					direction := column.GetSortOrder()
-					if direction == DEFAULT_DIRECTION {
-						column.SetSortOrder(OPPOSITE_DIRECTION)
-					} else {
-						column.SetSortOrder(DEFAULT_DIRECTION)
+				sortdirection := DEFAULT_DIRECTION
+				if !firstclick {
+					currentdirection := column.GetSortOrder()
+					if currentdirection == DEFAULT_DIRECTION {
+						sortdirection = OPPOSITE_DIRECTION
 					}
 				}
+				column.SetSortOrder(sortdirection)
+
+				viewsortchan <- ViewSort{sortcolumn, sortdirection}
 			} else {
 				column.SetSortOrder(DEFAULT_DIRECTION)
 				column.SetSortIndicator(false)
@@ -395,6 +468,8 @@ func createColumnSortToggle(treeview *gtk.TreeView, clickedcolumn int, sortcolum
 }
 
 func main() {
+	runtime.LockOSThread()
+
 	gtk.Init(nil)
 
 	const appID = "com.github.rakete.golocate"
@@ -414,7 +489,7 @@ func main() {
 	finish := make(chan struct{})
 	cores := runtime.NumCPU()
 
-	view := View{make(chan SortColumn), make(chan struct{}), make(chan struct{}), make(chan string)}
+	view := View{make(chan ViewSort), make(chan struct{}), make(chan struct{}), make(chan string)}
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
@@ -422,7 +497,12 @@ func main() {
 		_, scrollwin, searchentry := setupWindow(application, treeview, "golocate")
 		searchentry.GrabFocus()
 
-		go Controller(liststore, mem, view)
+		viewlist := ViewList{
+			store:   liststore,
+			entries: nil,
+			mutex:   new(sync.Mutex),
+		}
+		go Controller(&viewlist, mem, view)
 
 		for i := 0; i < int(treeview.GetNColumns()); i++ {
 			column := treeview.GetColumn(i)

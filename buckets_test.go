@@ -222,13 +222,13 @@ func BenchmarkRegexpBuiltin(b *testing.B) {
 			}
 
 			query1.MatchString(entry.name)
-			query1.MatchString(entry.path)
+			query1.MatchString(entry.dir)
 
 			query2.MatchString(entry.name)
-			query2.MatchString(entry.path)
+			query2.MatchString(entry.dir)
 
 			query3.MatchString(entry.name)
-			query3.MatchString(entry.path)
+			query3.MatchString(entry.dir)
 			return true
 		})
 	}
@@ -287,18 +287,18 @@ func BenchmarkRegexpPCRE(b *testing.B) {
 
 			namematcher1 := pcrere1.MatcherString(entry.name, 0)
 			namematcher1.Matches()
-			pathmatcher1 := pcrere1.MatcherString(entry.path, 0)
-			pathmatcher1.Matches()
+			dirmatcher1 := pcrere1.MatcherString(entry.dir, 0)
+			dirmatcher1.Matches()
 
 			namematcher2 := pcrere2.MatcherString(entry.name, 0)
 			namematcher2.Matches()
-			pathmatcher2 := pcrere2.MatcherString(entry.path, 0)
-			pathmatcher2.Matches()
+			dirmatcher2 := pcrere2.MatcherString(entry.dir, 0)
+			dirmatcher2.Matches()
 
 			namematcher3 := pcrere3.MatcherString(entry.name, 0)
 			namematcher3.Matches()
-			pathmatcher3 := pcrere3.MatcherString(entry.path, 0)
-			pathmatcher3.Matches()
+			dirmatcher3 := pcrere3.MatcherString(entry.dir, 0)
+			dirmatcher3.Matches()
 
 			return true
 		})

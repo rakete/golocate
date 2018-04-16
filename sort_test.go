@@ -23,7 +23,7 @@ func getDirectoryFiles(dirs []string) []*FileEntry {
 						log.Println("Could not read file:", err)
 					} else {
 						files = append(files, &FileEntry{
-							path:    dir,
+							dir:     dir,
 							name:    fileinfo.Name(),
 							modtime: fileinfo.ModTime(),
 							size:    fileinfo.Size(),

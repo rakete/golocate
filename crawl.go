@@ -17,6 +17,7 @@ import (
 
 type FileEntry struct {
 	path    string
+	dir     string
 	name    string
 	modtime time.Time
 	size    int64
@@ -72,7 +73,7 @@ func (c *SimpleCache) Put(k string, v bool) {
 }
 
 type MatchCaches struct {
-	paths Cache
+	dirs  Cache
 	names Cache
 }
 
@@ -118,7 +119,7 @@ func (entries *FileEntries) Take(cache MatchCaches, sortcolumn SortColumn, direc
 
 	numresults := 0
 	aborted := false
-	var namecache, pathcache Cache
+	var namecache, dircache Cache
 	if cache.names != nil {
 		namecache = cache.names
 	} else {
@@ -126,11 +127,11 @@ func (entries *FileEntries) Take(cache MatchCaches, sortcolumn SortColumn, direc
 		namecache = &empty
 	}
 
-	if cache.paths != nil {
-		pathcache = cache.paths
+	if cache.dirs != nil {
+		dircache = cache.dirs
 	} else {
 		empty := SimpleCache(map[string]bool{})
-		pathcache = &empty
+		dircache = &empty
 	}
 
 sortedloop:
@@ -145,26 +146,26 @@ sortedloop:
 
 			entry := entries.sorted[index]
 			entryname := entry.name
-			entrypath := entry.path
+			entrydir := entry.dir
 
-			var matchedname, knownname, matchedpath, knownpath bool
+			var matchedname, knownname, matcheddir, knowndir bool
 			if query != nil {
 				matchedname, knownname = namecache.Test(entryname)
-				matchedpath, knownpath = pathcache.Test(entrypath)
+				matcheddir, knowndir = dircache.Test(entrydir)
 
-				if !matchedname && !matchedpath {
+				if !matchedname && !matcheddir {
 					if !knownname {
 						matchedname = query.MatchString(entryname)
 						namecache.Put(entryname, matchedname)
 					}
-					if !knownpath && !matchedname {
-						matchedpath = query.MatchString(entrypath)
-						pathcache.Put(entrypath, matchedpath)
+					if !knowndir && !matchedname {
+						matcheddir = query.MatchString(entrydir)
+						dircache.Put(entrydir, matcheddir)
 					}
 				}
 			}
 
-			if query == nil || matchedname || matchedpath {
+			if query == nil || matchedname || matcheddir {
 				results <- entry
 				numresults += 1
 			}
@@ -210,7 +211,8 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 				log.Println("Could not read file:", err)
 			} else {
 				entry := &FileEntry{
-					path:    dir,
+					path:    path.Join(dir, fileinfo.Name()),
+					dir:     dir,
 					name:    fileinfo.Name(),
 					modtime: fileinfo.ModTime(),
 					size:    fileinfo.Size(),
