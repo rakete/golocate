@@ -189,7 +189,7 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 		listlength := list.store.IterNChildren(nil)
 		if listlength < n {
 
-			list.mutex.Lock()
+			//list.mutex.Lock()
 
 			if oldsort != newsort {
 				switch newsort {
@@ -216,7 +216,7 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 				i += 1
 			}
 
-			list.mutex.Unlock()
+			//list.mutex.Unlock()
 		}
 
 		wg.Done()
@@ -228,32 +228,12 @@ func instantSearch(list *ViewList, query *regexp.Regexp) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	glib.IdleAdd(func() {
-		list.mutex.Lock()
+		//list.mutex.Lock()
 
 		i := 0
 		var newentries []*FileEntry
 		iter, valid := list.store.GetIterFirst()
 		for iter != nil && valid == true {
-
-			// namevalue, namelisterr := list.store.GetValue(iter, int(SORT_BY_NAME))
-			// if namelisterr == nil {
-			// 	namestring, namestringerr := namevalue.GetString()
-			// 	if namestringerr == nil && !query.MatchString(namestring) {
-			// 		dirvalue, dirlisterr := list.store.GetValue(iter, int(SORT_BY_DIR))
-			// 		if dirlisterr == nil {
-			// 			dirstring, dirstringerr := dirvalue.GetString()
-
-			// 			if dirstringerr == nil && !query.MatchString(dirstring) {
-			// 				list.store.Remove(iter)
-			// 				removed = true
-			// 			}
-			// 		} else {
-			// 			return
-			// 		}
-			// 	}
-			// } else {
-			// 	return
-			// }
 
 			if !query.MatchString(list.entries[i].name) && !query.MatchString(list.entries[i].dir) {
 				list.store.Remove(iter)
@@ -269,7 +249,7 @@ func instantSearch(list *ViewList, query *regexp.Regexp) {
 		list.entries = make([]*FileEntry, len(newentries))
 		copy(list.entries, newentries)
 
-		list.mutex.Unlock()
+		//list.mutex.Unlock()
 
 		wg.Done()
 	})
@@ -287,7 +267,7 @@ func updateList(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 	display := func(newentries []*FileEntry) {
 		wg.Add(1)
 		glib.IdleAdd(func() {
-			list.mutex.Lock()
+			//list.mutex.Lock()
 			log.Println("displaying", len(newentries), "entries")
 
 			i := 0
@@ -312,7 +292,7 @@ func updateList(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 
 			list.entries = make([]*FileEntry, len(newentries))
 			copy(list.entries, newentries)
-			list.mutex.Unlock()
+			//list.mutex.Unlock()
 
 			wg.Done()
 		})
