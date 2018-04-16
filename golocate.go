@@ -232,22 +232,30 @@ func instantSearch(list *ViewList, query *regexp.Regexp) {
 
 		i := 0
 		var newentries []*FileEntry
+		var removeindices []int
 		iter, valid := list.store.GetIterFirst()
 		for iter != nil && valid == true {
 
 			if !query.MatchString(list.entries[i].name) && !query.MatchString(list.entries[i].dir) {
-				list.store.Remove(iter)
-				valid = list.store.IterIsValid(iter)
+				removeindices = append(removeindices, i)
 			} else {
 				newentries = append(newentries, list.entries[i])
-				valid = list.store.IterNext(iter)
 			}
+			valid = list.store.IterNext(iter)
 
 			i += 1
 		}
 
-		list.entries = make([]*FileEntry, len(newentries))
-		copy(list.entries, newentries)
+		if len(newentries) > 0 {
+			iter := new(gtk.TreeIter)
+			for i, j := range removeindices {
+				list.store.IterNthChild(iter, nil, j-i)
+				list.store.Remove(iter)
+			}
+
+			list.entries = make([]*FileEntry, len(newentries))
+			copy(list.entries, newentries)
+		}
 
 		//list.mutex.Unlock()
 
