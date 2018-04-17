@@ -16,7 +16,6 @@ import (
 )
 
 type FileEntry struct {
-	path    string
 	dir     string
 	name    string
 	modtime time.Time
@@ -25,12 +24,14 @@ type FileEntry struct {
 
 type FilesChannel struct {
 	byname    chan SortedByName
+	bydir     chan SortedByDir
 	bymodtime chan SortedByModTime
 	bysize    chan SortedBySize
 }
 
 type ResultMemory struct {
 	byname    CrawlResult
+	bydir     CrawlResult
 	bymodtime CrawlResult
 	bysize    CrawlResult
 }
@@ -193,7 +194,7 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	if err != nil {
 		//log.Println("Could not read directory:", err)
 	} else {
-		wg.Add(3)
+		wg.Add(4)
 
 		var matches []string
 		for _, entry := range entries {
@@ -211,7 +212,6 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 				log.Println("Could not read file:", err)
 			} else {
 				entry := &FileEntry{
-					path:    path.Join(dir, fileinfo.Name()),
 					dir:     dir,
 					name:    fileinfo.Name(),
 					modtime: fileinfo.ModTime(),
@@ -223,10 +223,12 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 
 		if len(files) > 0 {
 			collect.byname <- files
+			collect.bydir <- files
 			collect.bymodtime <- files
 			collect.bysize <- files
 		} else {
 			defer func() {
+				wg.Done()
 				wg.Done()
 				wg.Done()
 				wg.Done()
@@ -237,8 +239,10 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	defer wg.Done()
 }
 
-func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan string, finish chan struct{}) {
-	collect := FilesChannel{make(chan SortedByName), make(chan SortedByModTime), make(chan SortedBySize)}
+func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan string, finish chan struct{}, directories []string) {
+	wg.Add(len(directories))
+
+	collect := FilesChannel{make(chan SortedByName), make(chan SortedByDir), make(chan SortedByModTime), make(chan SortedBySize)}
 	maxproc := make(chan struct{}, cores)
 	go func() {
 		for {
@@ -263,6 +267,23 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 
 				newbyname = sortStable(SortedByName(newbyname)).(SortedByName)
 				mem.byname.Merge(SORT_BY_NAME, newbyname)
+
+				wg.Done()
+			case <-finish:
+				return
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case files := <-collect.bydir:
+				newbydir := make([]*FileEntry, len(files))
+				copy(newbydir, files)
+
+				newbydir = sortStable(SortedByDir(newbydir)).(SortedByDir)
+				mem.bydir.Merge(SORT_BY_DIR, newbydir)
 
 				wg.Done()
 			case <-finish:

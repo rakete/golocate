@@ -21,6 +21,14 @@ func (entries SortedByName) Less(i, j int) bool {
 	return entries[i].name < entries[j].name
 }
 
+type SortedByDir []*FileEntry
+
+func (entries SortedByDir) Len() int      { return len(entries) }
+func (entries SortedByDir) Swap(i, j int) { entries[i], entries[j] = entries[j], entries[i] }
+func (entries SortedByDir) Less(i, j int) bool {
+	return entries[i].dir < entries[j].dir
+}
+
 type SortedByModTime []*FileEntry
 
 func (entries SortedByModTime) Len() int      { return len(entries) }
@@ -75,6 +83,9 @@ func sortMerge(sortcolumn SortColumn, left, right []*FileEntry) []*FileEntry {
 	case SORT_BY_NAME:
 		testRightBeforeLeft = SortedByName(xs).Less(0, 1)
 		testLeftBeforeRight = SortedByName(ys).Less(0, 1)
+	case SORT_BY_DIR:
+		testRightBeforeLeft = SortedByDir(xs).Less(0, 1)
+		testLeftBeforeRight = SortedByDir(ys).Less(0, 1)
 	case SORT_BY_MODTIME:
 		testRightBeforeLeft = SortedByModTime(xs).Less(0, 1)
 		testLeftBeforeRight = SortedByModTime(ys).Less(0, 1)
@@ -101,6 +112,8 @@ func sortMerge(sortcolumn SortColumn, left, right []*FileEntry) []*FileEntry {
 		switch sortcolumn {
 		case SORT_BY_NAME:
 			queue = SortedByName(append(left, right...))
+		case SORT_BY_DIR:
+			queue = SortedByDir(append(left, right...))
 		case SORT_BY_MODTIME:
 			queue = SortedByModTime(append(left, right...))
 		case SORT_BY_SIZE:

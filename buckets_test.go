@@ -23,6 +23,7 @@ func TestBuckets(t *testing.T) {
 
 	mem := ResultMemory{
 		NewNameBucket(),
+		NewDirBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
@@ -40,10 +41,7 @@ func TestBuckets(t *testing.T) {
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
 	wg.Add(1)
-	go Crawler(&wg, cores*2, mem, newdirs, finish)
-	for _, dir := range directories {
-		newdirs <- dir
-	}
+	go Crawler(&wg, cores*2, mem, newdirs, finish, directories)
 	wg.Wait()
 	close(finish)
 	log.Println("Crawl terminated")
@@ -93,7 +91,7 @@ func TestBuckets(t *testing.T) {
 			lastentry = entry
 			return true
 		} else {
-			if ModTimeThreshold(entry.modtime).Less(ModTimeThreshold(lastentry.modtime)) {
+			if makeModTimeThreshold(entry.modtime).Less(makeModTimeThreshold(lastentry.modtime)) {
 				t.Error("ModTimeBucket Walk could not assert ASCENDING sorting")
 				return false
 			}
@@ -112,7 +110,7 @@ func TestBuckets(t *testing.T) {
 			lastentry = entry
 			return true
 		} else {
-			if ModTimeThreshold(lastentry.modtime).Less(ModTimeThreshold(entry.modtime)) {
+			if makeModTimeThreshold(lastentry.modtime).Less(makeModTimeThreshold(entry.modtime)) {
 				t.Error("ModTimeBucket Walk could not assert DESCENDING sorting")
 				return false
 			}
@@ -173,7 +171,7 @@ func TestLess(t *testing.T) {
 		t.Error("a < A")
 	}
 
-	if ModTimeThreshold(time.Now().Add(-time.Minute)).Less(ModTimeThreshold(time.Now())) {
+	if makeModTimeThreshold(time.Now().Add(-time.Minute)).Less(makeModTimeThreshold(time.Now())) {
 		t.Error("time.Now().Add(-time.Minute) < time.Now")
 	}
 
@@ -189,6 +187,7 @@ func BenchmarkRegexpBuiltin(b *testing.B) {
 
 	mem := ResultMemory{
 		NewNameBucket(),
+		NewDirBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
@@ -200,10 +199,7 @@ func BenchmarkRegexpBuiltin(b *testing.B) {
 	finish := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go Crawler(&wg, cores, mem, newdirs, finish)
-	for _, dir := range directories {
-		newdirs <- dir
-	}
+	go Crawler(&wg, cores, mem, newdirs, finish, directories)
 	wg.Wait()
 	close(finish)
 
@@ -241,6 +237,7 @@ func BenchmarkRegexpPCRE(b *testing.B) {
 
 	mem := ResultMemory{
 		NewNameBucket(),
+		NewDirBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
@@ -252,10 +249,7 @@ func BenchmarkRegexpPCRE(b *testing.B) {
 	finish := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go Crawler(&wg, cores, mem, newdirs, finish)
-	for _, dir := range directories {
-		newdirs <- dir
-	}
+	go Crawler(&wg, cores, mem, newdirs, finish, directories)
 	wg.Wait()
 	close(finish)
 
@@ -313,9 +307,11 @@ func BenchmarkTake(b *testing.B) {
 		new(FileEntries),
 		new(FileEntries),
 		new(FileEntries),
+		new(FileEntries),
 	}
 	membuckets := ResultMemory{
 		NewNameBucket(),
+		NewDirBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
@@ -325,22 +321,14 @@ func BenchmarkTake(b *testing.B) {
 	cores := runtime.NumCPU()
 	finish := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go Crawler(&wg, cores, memslice, newdirs, finish)
-	for _, dir := range directories {
-		newdirs <- dir
-	}
-	wg.Done()
+	wg.Add(1)
+	go Crawler(&wg, cores, memslice, newdirs, finish, directories)
 	wg.Wait()
 	close(finish)
 
 	finish = make(chan struct{})
-	wg.Add(2)
-	go Crawler(&wg, cores, membuckets, newdirs, finish)
-	for _, dir := range directories {
-		newdirs <- dir
-	}
-	wg.Done()
+	wg.Add(1)
+	go Crawler(&wg, cores, membuckets, newdirs, finish, directories)
 	wg.Wait()
 	close(finish)
 

@@ -73,6 +73,17 @@ func BenchmarkSortedByName(b *testing.B) {
 	}
 }
 
+func BenchmarkSortedByDir(b *testing.B) {
+	b.StopTimer()
+
+	files := getDirectoryFiles([]string{"/tmp"})
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		sortStable(SortedByDir(files))
+	}
+}
+
 func BenchmarkSortedByModTime(b *testing.B) {
 	b.StopTimer()
 
@@ -155,9 +166,7 @@ func TestSortMerge(t *testing.T) {
 	log.Println("TestSortMerge finished")
 }
 
-func BenchmarkSortMergeByName(b *testing.B) {
-	b.StopTimer()
-
+func BenchmarkSortMerge(b *testing.B) {
 	directories := []string{
 		os.Getenv("HOME") + "/go/src/golocate/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/gtk/",
@@ -165,67 +174,40 @@ func BenchmarkSortMergeByName(b *testing.B) {
 		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/gdk/",
 		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/cairo/",
 	}
-	var cache [][]*FileEntry
-	for _, dir := range directories {
-		files := getDirectoryFiles([]string{dir})
-		cache = append(cache, sortStable(SortedByName(files)).(SortedByName))
+
+	benchmarks := []struct {
+		name    string
+		sorting SortColumn
+	}{
+		{"ByName", SORT_BY_NAME},
+		{"ByDir", SORT_BY_DIR},
+		{"ByModTime", SORT_BY_MODTIME},
+		{"BySize", SORT_BY_SIZE},
 	}
 
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		var merged []*FileEntry
-		for _, files := range cache {
-			merged = sortMerge(SORT_BY_NAME, merged, files)
+	for _, bm := range benchmarks {
+
+		var cache [][]*FileEntry
+		for _, dir := range directories {
+			files := getDirectoryFiles([]string{dir})
+			switch bm.sorting {
+			case SORT_BY_NAME:
+				cache = append(cache, sortStable(SortedByName(files)).(SortedByName))
+			case SORT_BY_DIR:
+				cache = append(cache, sortStable(SortedByDir(files)).(SortedByDir))
+			case SORT_BY_MODTIME:
+				cache = append(cache, sortStable(SortedByModTime(files)).(SortedByModTime))
+			case SORT_BY_SIZE:
+				cache = append(cache, sortStable(SortedBySize(files)).(SortedBySize))
+			}
 		}
-	}
-}
-
-func BenchmarkSortMergeByModTime(b *testing.B) {
-	b.StopTimer()
-
-	directories := []string{
-		os.Getenv("HOME") + "/go/src/golocate/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/gtk/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/glib/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/gdk/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/cairo/",
-	}
-	var cache [][]*FileEntry
-	for _, dir := range directories {
-		files := getDirectoryFiles([]string{dir})
-		cache = append(cache, sortStable(SortedByModTime(files)).(SortedByModTime))
-	}
-
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		var merged []*FileEntry
-		for _, files := range cache {
-			merged = sortMerge(SORT_BY_MODTIME, merged, files)
-		}
-	}
-}
-
-func BenchmarkSortMergeBySize(b *testing.B) {
-	b.StopTimer()
-
-	directories := []string{
-		os.Getenv("HOME") + "/go/src/golocate/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/gtk/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/glib/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/gdk/",
-		os.Getenv("HOME") + "/go/src/golocate/vendor/github.com/gotk3/gotk3/cairo/",
-	}
-	var cache [][]*FileEntry
-	for _, dir := range directories {
-		files := getDirectoryFiles([]string{dir})
-		cache = append(cache, sortStable(SortedBySize(files)).(SortedBySize))
-	}
-
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		var merged []*FileEntry
-		for _, files := range cache {
-			merged = sortMerge(SORT_BY_SIZE, merged, files)
-		}
+		b.Run(bm.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				var merged []*FileEntry
+				for _, files := range cache {
+					merged = sortMerge(bm.sorting, merged, files)
+				}
+			}
+		})
 	}
 }

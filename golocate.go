@@ -67,7 +67,7 @@ func setupTreeView() (*gtk.TreeView, *gtk.ListStore) {
 	}
 
 	treeview.AppendColumn(createColumn("Name", SORT_BY_NAME))
-	treeview.AppendColumn(createColumn("Path", SORT_BY_DIR))
+	treeview.AppendColumn(createColumn("Dir", SORT_BY_DIR))
 	treeview.AppendColumn(createColumn("Size", SORT_BY_SIZE))
 	treeview.AppendColumn(createColumn("Modification Time", SORT_BY_MODTIME))
 
@@ -196,6 +196,7 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 				case SORT_BY_NAME:
 					sort.Stable(SortedByName(list.entries))
 				case SORT_BY_DIR:
+					sort.Stable(SortedByDir(list.entries))
 				case SORT_BY_MODTIME:
 					sort.Stable(SortedByModTime(list.entries))
 				case SORT_BY_SIZE:
@@ -323,7 +324,7 @@ func updateList(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 					return
 				}
 				batch = append(batch, entry)
-			case <-time.After(1000 * time.Millisecond):
+			case <-time.After(500 * time.Millisecond):
 				if (n > 10 && len(batch) > 10) || len(batch) > 0 {
 					display(batch)
 				}
@@ -407,6 +408,8 @@ func Controller(list *ViewList, mem ResultMemory, view View) {
 		switch currentsort {
 		case SORT_BY_NAME:
 			currentbucket = mem.byname.(*Node)
+		case SORT_BY_DIR:
+			currentbucket = mem.bydir.(*Node)
 		case SORT_BY_SIZE:
 			currentbucket = mem.bysize.(*Node)
 		case SORT_BY_MODTIME:
@@ -470,6 +473,7 @@ func main() {
 
 	mem := ResultMemory{
 		NewNameBucket(),
+		NewDirBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
@@ -498,6 +502,8 @@ func main() {
 			switch title {
 			case "Name":
 				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_NAME))
+			case "Dir":
+				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_DIR))
 			case "Size":
 				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_SIZE))
 			case "Modification Time":
@@ -519,12 +525,9 @@ func main() {
 			}
 		})
 
-		wg.Add(1)
-		go Crawler(&wg, cores, mem, newdirs, finish)
 		log.Println("starting Crawl on", cores, "cores")
-		for _, dir := range directories {
-			newdirs <- dir
-		}
+		wg.Add(1)
+		go Crawler(&wg, cores, mem, newdirs, finish, directories)
 
 		lastupper := -1.0
 		adjustment := scrollwin.GetVAdjustment()

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/gotk3/gotk3/gtk"
 
@@ -24,6 +25,7 @@ func TestFileEntries(t *testing.T) {
 		new(FileEntries),
 		new(FileEntries),
 		new(FileEntries),
+		new(FileEntries),
 	}
 	finish := make(chan struct{})
 
@@ -35,10 +37,7 @@ func TestFileEntries(t *testing.T) {
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", cores, "cores")
 	wg.Add(1)
-	go Crawler(&wg, cores*2, mem, newdirs, finish)
-	for _, dir := range directories {
-		newdirs <- dir
-	}
+	go Crawler(&wg, cores*2, mem, newdirs, finish, directories)
 	wg.Wait()
 	close(finish)
 	log.Println("Crawl terminated")
@@ -88,6 +87,7 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		new(FileEntries),
 		new(FileEntries),
 		new(FileEntries),
+		new(FileEntries),
 	}
 	directories := []string{path.Join(os.Getenv("GOPATH"))}
 	newdirs := make(chan string)
@@ -97,12 +97,9 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
-		wg.Add(2)
-		go Crawler(&wg, cores, mem, newdirs, finish)
-		for _, dir := range directories {
-			newdirs <- dir
-		}
-		wg.Done()
+		wg.Add(1)
+		go Crawler(&wg, cores, mem, newdirs, finish, directories)
+		time.Sleep(10 * time.Millisecond)
 		wg.Wait()
 		close(finish)
 
@@ -131,6 +128,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 
 	mem := ResultMemory{
 		NewNameBucket(),
+		NewDirBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
@@ -142,12 +140,9 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
-		wg.Add(2)
-		go Crawler(&wg, cores, mem, newdirs, finish)
-		for _, dir := range directories {
-			newdirs <- dir
-		}
-		wg.Done()
+		wg.Add(1)
+		go Crawler(&wg, cores, mem, newdirs, finish, directories)
+		time.Sleep(10 * time.Millisecond)
 		wg.Wait()
 		close(finish)
 

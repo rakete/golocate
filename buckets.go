@@ -14,31 +14,57 @@ import (
 
 type Threshold interface {
 	Less(than Threshold) bool
+	Equal(than Threshold) bool
 	String() string
 }
 
 type NameThreshold string
-type ModTimeThreshold time.Time
+type DirThreshold string
+type ModTimeThreshold func() time.Time
 type SizeThreshold int64
 
 func (a NameThreshold) Less(b Threshold) bool {
 	return a < b.(NameThreshold)
 }
 
+func (a NameThreshold) Equal(b Threshold) bool {
+	return a == b.(NameThreshold)
+}
+
 func (a NameThreshold) String() string {
 	return string(a)
 }
 
+func (a DirThreshold) Less(b Threshold) bool {
+	return a < b.(DirThreshold)
+}
+
+func (a DirThreshold) Equal(b Threshold) bool {
+	return a == b.(DirThreshold)
+}
+
+func (a DirThreshold) String() string {
+	return string(a)
+}
+
 func (a ModTimeThreshold) Less(b Threshold) bool {
-	return time.Time(a).After(time.Time(b.(ModTimeThreshold)))
+	return a().After(b.(ModTimeThreshold)())
+}
+
+func (a ModTimeThreshold) Equal(b Threshold) bool {
+	return a().Equal(b.(ModTimeThreshold)())
 }
 
 func (a ModTimeThreshold) String() string {
-	return time.Time(a).Format("2006-01-02 15:04:05")
+	return a().Format("2006-01-02 15:04:05")
 }
 
 func (a SizeThreshold) Less(b Threshold) bool {
 	return a > b.(SizeThreshold)
+}
+
+func (a SizeThreshold) Equal(b Threshold) bool {
+	return a == b.(SizeThreshold)
 }
 
 func (a SizeThreshold) String() string {
@@ -91,6 +117,26 @@ func NewNameBucket() *Node {
 	return bucket
 }
 
+func NewDirBucket() *Node {
+	bucket := new(Node)
+
+	for _, char := range "9abcdefghijklmnopqrstuvwxyz" {
+		bucket.children = append(bucket.children, &Node{
+			threshold: DirThreshold(char),
+		})
+	}
+
+	bucket.children = append(bucket.children, &Node{
+		threshold: nil,
+	})
+
+	return bucket
+}
+
+func makeModTimeThreshold(t time.Time) ModTimeThreshold {
+	return ModTimeThreshold(func() time.Time { return t })
+}
+
 func NewModTimeBucket() *Node {
 	bucket := new(Node)
 
@@ -104,56 +150,56 @@ func NewModTimeBucket() *Node {
 	decade := year * 10
 
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now),
+		threshold: makeModTimeThreshold(now),
 	})
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now.Add(-second * 10)),
+		threshold: makeModTimeThreshold(now.Add(-second * 10)),
 	})
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now.Add(-minute)),
+		threshold: makeModTimeThreshold(now.Add(-minute)),
 	})
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now.Add(-minute * 10)),
+		threshold: makeModTimeThreshold(now.Add(-minute * 10)),
 	})
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now.Add(-minute * 20)),
+		threshold: makeModTimeThreshold(now.Add(-minute * 20)),
 	})
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now.Add(-minute * 30)),
+		threshold: makeModTimeThreshold(now.Add(-minute * 30)),
 	})
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now.Add(-minute * 40)),
+		threshold: makeModTimeThreshold(now.Add(-minute * 40)),
 	})
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now.Add(-minute * 50)),
+		threshold: makeModTimeThreshold(now.Add(-minute * 50)),
 	})
 
 	for i := 1; i < 24; i++ {
 		bucket.children = append(bucket.children, &Node{
-			threshold: ModTimeThreshold(now.Add(-hour * time.Duration(i))),
+			threshold: makeModTimeThreshold(now.Add(-hour * time.Duration(i))),
 		})
 	}
 
 	for i := 1; i < 7; i++ {
 		bucket.children = append(bucket.children, &Node{
-			threshold: ModTimeThreshold(now.Add(-day * time.Duration(i))),
+			threshold: makeModTimeThreshold(now.Add(-day * time.Duration(i))),
 		})
 	}
 
 	for i := 1; i < 52; i++ {
 		bucket.children = append(bucket.children, &Node{
-			threshold: ModTimeThreshold(now.Add(-week * time.Duration(i))),
+			threshold: makeModTimeThreshold(now.Add(-week * time.Duration(i))),
 		})
 	}
 
 	for i := 1; i < 10; i++ {
 		bucket.children = append(bucket.children, &Node{
-			threshold: ModTimeThreshold(now.Add(-year * time.Duration(i))),
+			threshold: makeModTimeThreshold(now.Add(-year * time.Duration(i))),
 		})
 	}
 
 	bucket.children = append(bucket.children, &Node{
-		threshold: ModTimeThreshold(now.Add(-decade)),
+		threshold: makeModTimeThreshold(now.Add(-decade)),
 	})
 
 	bucket.children = append(bucket.children, &Node{
@@ -312,8 +358,10 @@ func (node *Node) Less(entry *FileEntry) bool {
 		switch node.threshold.(type) {
 		case NameThreshold:
 			return NameThreshold(entry.name).Less(node.threshold)
+		case DirThreshold:
+			return DirThreshold(entry.dir).Less(node.threshold)
 		case ModTimeThreshold:
-			return ModTimeThreshold(entry.modtime).Less(node.threshold)
+			return makeModTimeThreshold(entry.modtime).Less(node.threshold)
 		case SizeThreshold:
 			return SizeThreshold(entry.size).Less(node.threshold)
 		}
@@ -327,6 +375,8 @@ func (node *Node) Sort(sortcolumn SortColumn) {
 		switch sortcolumn {
 		case SORT_BY_NAME:
 			node.queue = sortStable(SortedByName(node.queue)).(SortedByName)
+		case SORT_BY_DIR:
+			node.queue = sortStable(SortedByDir(node.queue)).(SortedByDir)
 		case SORT_BY_MODTIME:
 			node.queue = sortStable(SortedByModTime(node.queue)).(SortedByModTime)
 		case SORT_BY_SIZE:
@@ -359,8 +409,10 @@ func (node *Node) ThresholdSplit(i int) Threshold {
 	switch node.threshold.(type) {
 	case NameThreshold:
 		return NameThreshold(node.sorted[i].name)
+	case DirThreshold:
+		return DirThreshold(node.sorted[i].dir)
 	case ModTimeThreshold:
-		return ModTimeThreshold(node.sorted[i].modtime)
+		return makeModTimeThreshold(node.sorted[i].modtime)
 	case SizeThreshold:
 		return SizeThreshold(node.sorted[i].size)
 	}
@@ -582,7 +634,8 @@ func Split(sortcolumn SortColumn, bucket Bucket, numparts int) {
 	// with nodes containing very few entries and then one node containing almost all of them which
 	// would be further divided, resulting in a very deep subtree
 	inc := len(node.sorted) / numparts
-	if bucket.ThresholdSplit(inc) == endthreshold {
+	incthreshold := bucket.ThresholdSplit(inc)
+	if (incthreshold != nil && incthreshold.Equal(endthreshold)) || (incthreshold == nil && endthreshold == nil) {
 		return
 	}
 
