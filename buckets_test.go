@@ -52,7 +52,7 @@ func TestBuckets(t *testing.T) {
 	abort := make(chan struct{})
 	taken := make(chan *FileEntry)
 
-	var byname, bymodtime, bysize []*FileEntry
+	var byname, bydir, bymodtime, bysize []*FileEntry
 
 	taker := func(xs *[]*FileEntry) {
 		for {
@@ -67,6 +67,9 @@ func TestBuckets(t *testing.T) {
 	go taker(&byname)
 	mem.byname.Take(cache, SORT_BY_NAME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 
+	go taker(&bydir)
+	mem.bydir.Take(cache, SORT_BY_DIR, gtk.SORT_ASCENDING, query, 1000, abort, taken)
+
 	go taker(&bymodtime)
 	mem.bymodtime.Take(cache, SORT_BY_MODTIME, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 
@@ -74,12 +77,13 @@ func TestBuckets(t *testing.T) {
 	mem.bysize.Take(cache, SORT_BY_SIZE, gtk.SORT_ASCENDING, query, 1000, abort, taken)
 
 	log.Println("len(byname):", len(byname), mem.byname.NumFiles())
+	PrintBucket(mem.byname.(*Node), -1)
+	log.Println("len(bydir):", len(bydir), mem.bydir.NumFiles())
+	PrintBucket(mem.bydir.(*Node), -1)
 	log.Println("len(bymodtime):", len(bymodtime), mem.bymodtime.NumFiles())
+	PrintBucket(mem.bymodtime.(*Node), -1)
 	log.Println("len(bysize):", len(bysize), mem.bysize.NumFiles())
-
-	//Print(mem.byname.(*NameBucket), 0)
-	//Print(mem.bymodtime.(*ModTimeBucket), 0)
-	//Print(mem.bysize.(*SizeBucket), 0)
+	PrintBucket(mem.bysize.(*Node), -1)
 
 	var lastentry *FileEntry
 	WalkEntries(mem.bymodtime.(*Node), gtk.SORT_ASCENDING, func(entry *FileEntry) bool {
@@ -101,7 +105,7 @@ func TestBuckets(t *testing.T) {
 	})
 
 	lastentry = nil
-	WalkEntries(mem.bymodtime.(*Node), gtk.SORT_DESCENDING, func(entry *FileEntry) bool {
+	WalkEntries(mem.bydir.(*Node), gtk.SORT_DESCENDING, func(entry *FileEntry) bool {
 		if entry == nil {
 			return true
 		}
