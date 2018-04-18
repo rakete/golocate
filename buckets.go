@@ -556,12 +556,12 @@ childrenloop:
 
 		childnode.queuemutex.Lock()
 		for i < len(files) && child.Less(files[i]) {
+			childnode.lastchange = time.Now()
 			if len(childnode.children) > 0 {
 				//childnode.queuemutex.Unlock()
 				i = Insert(sortcolumn, child, i, files)
 				//childnode.queuemutex.Lock()
 			} else {
-				childnode.lastchange = time.Now()
 				childnode.queue = append(childnode.queue, files[i])
 				i += 1
 			}
