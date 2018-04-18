@@ -11,6 +11,7 @@ import (
 	"time"
 	//"gotk3/gtk"
 	//"fmt"
+	"sort"
 
 	"github.com/gotk3/gotk3/gtk"
 )
@@ -104,11 +105,11 @@ func (entries *FileEntries) Take(cache MatchCaches, sortcolumn SortColumn, direc
 
 	switch sortcolumn {
 	case SORT_BY_NAME:
-		entries.queue = sortStable(SortedByName(entries.queue)).(SortedByName)
+		sort.Stable(SortedByName(entries.queue))
 	case SORT_BY_MODTIME:
-		entries.queue = sortStable(SortedByModTime(entries.queue)).(SortedByModTime)
+		sort.Stable(SortedByModTime(entries.queue))
 	case SORT_BY_SIZE:
-		entries.queue = sortStable(SortedBySize(entries.queue)).(SortedBySize)
+		sort.Stable(SortedBySize(entries.queue))
 	}
 	entries.sorted = sortMerge(sortcolumn, entries.sorted, entries.queue)
 	entries.queue = nil
@@ -265,7 +266,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 				newbyname := make([]*FileEntry, len(files))
 				copy(newbyname, files)
 
-				newbyname = sortStable(SortedByName(newbyname)).(SortedByName)
+				sort.Stable(SortedByName(newbyname))
 				mem.byname.Merge(SORT_BY_NAME, newbyname)
 
 				wg.Done()
@@ -282,7 +283,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 				newbydir := make([]*FileEntry, len(files))
 				copy(newbydir, files)
 
-				newbydir = sortStable(SortedByDir(newbydir)).(SortedByDir)
+				sort.Stable(SortedByDir(newbydir))
 				mem.bydir.Merge(SORT_BY_DIR, newbydir)
 
 				wg.Done()
@@ -299,7 +300,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 				newbymodtime := make([]*FileEntry, len(files))
 				copy(newbymodtime, files)
 
-				newbymodtime = sortStable(SortedByModTime(newbymodtime)).(SortedByModTime)
+				sort.Stable(SortedByModTime(newbymodtime))
 				mem.bymodtime.Merge(SORT_BY_MODTIME, newbymodtime)
 
 				wg.Done()
@@ -316,7 +317,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 				newbysize := make([]*FileEntry, len(files))
 				copy(newbysize, files)
 
-				newbysize = sortStable(SortedBySize(newbysize)).(SortedBySize)
+				sort.Stable(SortedBySize(newbysize))
 				mem.bysize.Merge(SORT_BY_SIZE, newbysize)
 
 				wg.Done()

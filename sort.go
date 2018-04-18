@@ -45,10 +45,6 @@ func (entries SortedBySize) Less(i, j int) bool {
 	return entries[i].size > entries[j].size
 }
 
-func sortStable(files sort.Interface) sort.Interface {
-	sort.Stable(files)
-	return files
-}
 
 func sortMerge(sortcolumn SortColumn, left, right []*FileEntry) []*FileEntry {
 	if len(left) == 0 {
