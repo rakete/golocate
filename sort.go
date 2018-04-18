@@ -26,7 +26,7 @@ type SortedByDir []*FileEntry
 func (entries SortedByDir) Len() int      { return len(entries) }
 func (entries SortedByDir) Swap(i, j int) { entries[i], entries[j] = entries[j], entries[i] }
 func (entries SortedByDir) Less(i, j int) bool {
-	return entries[i].dir < entries[j].dir
+	return entries[i].dir[1:] < entries[j].dir[1:]
 }
 
 type SortedByModTime []*FileEntry

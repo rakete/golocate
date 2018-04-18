@@ -91,7 +91,7 @@ func TestBuckets(t *testing.T) {
 			lastentry = entry
 			return true
 		} else {
-			if makeModTimeThreshold(entry.modtime).Less(makeModTimeThreshold(lastentry.modtime)) {
+			if ModTimeThreshold(entry.modtime).Less(ModTimeThreshold(lastentry.modtime)) {
 				t.Error("ModTimeBucket Walk could not assert ASCENDING sorting")
 				return false
 			}
@@ -110,8 +110,8 @@ func TestBuckets(t *testing.T) {
 			lastentry = entry
 			return true
 		} else {
-			if makeModTimeThreshold(lastentry.modtime).Less(makeModTimeThreshold(entry.modtime)) {
-				t.Error("ModTimeBucket Walk could not assert DESCENDING sorting")
+			if DirThreshold(lastentry.dir).Less(DirThreshold(entry.dir)) {
+				t.Error("DirBucket Walk could not assert DESCENDING sorting")
 				return false
 			}
 			lastentry = entry
@@ -171,7 +171,7 @@ func TestLess(t *testing.T) {
 		t.Error("a < A")
 	}
 
-	if makeModTimeThreshold(time.Now().Add(-time.Minute)).Less(makeModTimeThreshold(time.Now())) {
+	if ModTimeThreshold(time.Now().Add(-time.Minute)).Less(ModTimeThreshold(time.Now())) {
 		t.Error("time.Now().Add(-time.Minute) < time.Now")
 	}
 

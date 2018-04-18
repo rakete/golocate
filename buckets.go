@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	//"sort"
-	//"path"
+	"path"
 	"regexp"
 	"sync"
 	//"syscall"
+	"os"
+	"sort"
 	"time"
 
 	gtk "github.com/gotk3/gotk3/gtk"
@@ -20,7 +22,7 @@ type Threshold interface {
 
 type NameThreshold string
 type DirThreshold string
-type ModTimeThreshold func() time.Time
+type ModTimeThreshold time.Time
 type SizeThreshold int64
 
 func (a NameThreshold) Less(b Threshold) bool {
@@ -36,11 +38,11 @@ func (a NameThreshold) String() string {
 }
 
 func (a DirThreshold) Less(b Threshold) bool {
-	return a < b.(DirThreshold)
+	return a[1:] < b.(DirThreshold)[1:]
 }
 
 func (a DirThreshold) Equal(b Threshold) bool {
-	return a == b.(DirThreshold)
+	return a[1:] == b.(DirThreshold)[1:]
 }
 
 func (a DirThreshold) String() string {
@@ -48,15 +50,15 @@ func (a DirThreshold) String() string {
 }
 
 func (a ModTimeThreshold) Less(b Threshold) bool {
-	return a().After(b.(ModTimeThreshold)())
+	return time.Time(a).After(time.Time(b.(ModTimeThreshold)))
 }
 
 func (a ModTimeThreshold) Equal(b Threshold) bool {
-	return a().Equal(b.(ModTimeThreshold)())
+	return time.Time(a).Equal(time.Time(b.(ModTimeThreshold)))
 }
 
 func (a ModTimeThreshold) String() string {
-	return a().Format("2006-01-02 15:04:05")
+	return time.Time(a).Format("2006-01-02 15:04:05")
 }
 
 func (a SizeThreshold) Less(b Threshold) bool {
@@ -104,7 +106,7 @@ type Bucket interface {
 func NewNameBucket() *Node {
 	bucket := new(Node)
 
-	for _, char := range "9abcdefghijklmnopqrstuvwxyz" {
+	for _, char := range "@abcdefghijklmnopqrstuvwxyz" {
 		bucket.children = append(bucket.children, &Node{
 			threshold: NameThreshold(char),
 		})
@@ -120,7 +122,26 @@ func NewNameBucket() *Node {
 func NewDirBucket() *Node {
 	bucket := new(Node)
 
-	for _, char := range "9abcdefghijklmnopqrstuvwxyz" {
+	homedir := os.Getenv("HOME")
+	var thresholds []string
+
+	thresholds = append(thresholds, "/h")
+	thresholds = append(thresholds, path.Join(homedir, ".l"))
+	thresholds = append(thresholds, path.Join(homedir, ".local", "s"))
+	if _, err := os.Stat(path.Join(homedir, ".local", "share", "Zeal", "Zeal", "docsets")); err == nil {
+		for _, char := range "ELNOSz" {
+			thresholds = append(thresholds, path.Join(homedir, ".local", "share", "Zeal", "Zeal", "docsets", string(char)))
+		}
+	}
+
+	thresholds = append(thresholds, path.Join(homedir, ".local", "share", "z"))
+	thresholds = append(thresholds, path.Join(homedir, ".z"))
+	for _, char := range "Zmz" {
+		thresholds = append(thresholds, path.Join(homedir, string(char)))
+	}
+	thresholds = append(thresholds, []string{"/t", "/v", "/w"}...)
+
+	for _, char := range thresholds {
 		bucket.children = append(bucket.children, &Node{
 			threshold: DirThreshold(char),
 		})
@@ -133,73 +154,43 @@ func NewDirBucket() *Node {
 	return bucket
 }
 
-func makeModTimeThreshold(t time.Time) ModTimeThreshold {
-	return ModTimeThreshold(func() time.Time { return t })
-}
-
 func NewModTimeBucket() *Node {
 	bucket := new(Node)
 
 	now := time.Now()
-	second := time.Second
-	minute := time.Minute
 	hour := time.Hour
 	day := time.Hour * 24
 	week := day * 7
+	month := week * 4
 	year := week * 52
 	decade := year * 10
 
 	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now.Add(-second * 10)),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now.Add(-minute)),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now.Add(-minute * 10)),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now.Add(-minute * 20)),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now.Add(-minute * 30)),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now.Add(-minute * 40)),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now.Add(-minute * 50)),
+		threshold: ModTimeThreshold(now),
 	})
 
-	for i := 1; i < 24; i++ {
-		bucket.children = append(bucket.children, &Node{
-			threshold: makeModTimeThreshold(now.Add(-hour * time.Duration(i))),
-		})
-	}
-
-	for i := 1; i < 7; i++ {
-		bucket.children = append(bucket.children, &Node{
-			threshold: makeModTimeThreshold(now.Add(-day * time.Duration(i))),
-		})
-	}
-
-	for i := 1; i < 52; i++ {
-		bucket.children = append(bucket.children, &Node{
-			threshold: makeModTimeThreshold(now.Add(-week * time.Duration(i))),
-		})
-	}
-
-	for i := 1; i < 10; i++ {
-		bucket.children = append(bucket.children, &Node{
-			threshold: makeModTimeThreshold(now.Add(-year * time.Duration(i))),
-		})
-	}
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-hour)),
+	})
 
 	bucket.children = append(bucket.children, &Node{
-		threshold: makeModTimeThreshold(now.Add(-decade)),
+		threshold: ModTimeThreshold(now.Add(-day)),
+	})
+
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-week)),
+	})
+
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-month)),
+	})
+
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-year)),
+	})
+
+	bucket.children = append(bucket.children, &Node{
+		threshold: ModTimeThreshold(now.Add(-decade)),
 	})
 
 	bucket.children = append(bucket.children, &Node{
@@ -212,9 +203,6 @@ func NewModTimeBucket() *Node {
 func NewSizeBucket() *Node {
 	bucket := new(Node)
 
-	bucket.children = append(bucket.children, &Node{
-		threshold: SizeThreshold(1000000000),
-	})
 	bucket.children = append(bucket.children, &Node{
 		threshold: SizeThreshold(100000000),
 	})
@@ -230,21 +218,15 @@ func NewSizeBucket() *Node {
 	bucket.children = append(bucket.children, &Node{
 		threshold: SizeThreshold(10000),
 	})
-	// <4096 and <4097 are very popular file sizes
+	// <4097 are very popular file sizes
 	bucket.children = append(bucket.children, &Node{
 		threshold: SizeThreshold(4097),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: SizeThreshold(4096),
 	})
 	bucket.children = append(bucket.children, &Node{
 		threshold: SizeThreshold(1000),
 	})
 	bucket.children = append(bucket.children, &Node{
 		threshold: SizeThreshold(100),
-	})
-	bucket.children = append(bucket.children, &Node{
-		threshold: SizeThreshold(10),
 	})
 	bucket.children = append(bucket.children, &Node{
 		threshold: SizeThreshold(1),
@@ -361,7 +343,7 @@ func (node *Node) Less(entry *FileEntry) bool {
 		case DirThreshold:
 			return DirThreshold(entry.dir).Less(node.threshold)
 		case ModTimeThreshold:
-			return makeModTimeThreshold(entry.modtime).Less(node.threshold)
+			return ModTimeThreshold(entry.modtime).Less(node.threshold)
 		case SizeThreshold:
 			return SizeThreshold(entry.size).Less(node.threshold)
 		}
@@ -374,13 +356,13 @@ func (node *Node) Sort(sortcolumn SortColumn) {
 	if len(node.queue) > 0 {
 		switch sortcolumn {
 		case SORT_BY_NAME:
-			node.queue = sortStable(SortedByName(node.queue)).(SortedByName)
+			sort.Stable(SortedByName(node.queue))
 		case SORT_BY_DIR:
-			node.queue = sortStable(SortedByDir(node.queue)).(SortedByDir)
+			sort.Stable(SortedByDir(node.queue))
 		case SORT_BY_MODTIME:
-			node.queue = sortStable(SortedByModTime(node.queue)).(SortedByModTime)
+			sort.Stable(SortedByModTime(node.queue))
 		case SORT_BY_SIZE:
-			node.queue = sortStable(SortedBySize(node.queue)).(SortedBySize)
+			sort.Stable(SortedBySize(node.queue))
 		}
 		node.sorted = sortMerge(sortcolumn, node.sorted, node.queue)
 		node.queue = nil
@@ -412,7 +394,7 @@ func (node *Node) ThresholdSplit(i int) Threshold {
 	case DirThreshold:
 		return DirThreshold(node.sorted[i].dir)
 	case ModTimeThreshold:
-		return makeModTimeThreshold(node.sorted[i].modtime)
+		return ModTimeThreshold(node.sorted[i].modtime)
 	case SizeThreshold:
 		return SizeThreshold(node.sorted[i].size)
 	}
