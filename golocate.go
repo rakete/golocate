@@ -237,10 +237,10 @@ func instantSearch(list *ViewList, query *regexp.Regexp) {
 		iter, valid := list.store.GetIterFirst()
 		for iter != nil && valid == true {
 
-			if !query.MatchString(list.entries[i].name) && !query.MatchString(list.entries[i].dir) {
-				removeindices = append(removeindices, i)
-			} else {
+			if query.MatchString(list.entries[i].name) || query.MatchString(list.entries[i].dir) {
 				newentries = append(newentries, list.entries[i])
+			} else {
+				removeindices = append(removeindices, i)
 			}
 			valid = list.store.IterNext(iter)
 
@@ -249,8 +249,8 @@ func instantSearch(list *ViewList, query *regexp.Regexp) {
 
 		if len(newentries) > 0 {
 			iter := new(gtk.TreeIter)
-			for i, j := range removeindices {
-				list.store.IterNthChild(iter, nil, j-i)
+			for offset, index := range removeindices {
+				list.store.IterNthChild(iter, nil, index-offset)
 				list.store.Remove(iter)
 			}
 
