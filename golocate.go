@@ -192,16 +192,35 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 			//list.mutex.Lock()
 
 			if oldsort != newsort {
-				switch newsort {
-				case SORT_BY_NAME:
-					sort.Stable(SortedByName(list.entries))
-				case SORT_BY_DIR:
-					sort.Stable(SortedByDir(list.entries))
-				case SORT_BY_MODTIME:
-					sort.Stable(SortedByModTime(list.entries))
-				case SORT_BY_SIZE:
-					sort.Stable(SortedBySize(list.entries))
+				var directories []string
+				direntries := make(map[string][]*FileEntry)
+				for _, entry := range list.entries {
+					entries, ok := direntries[entry.dir]
+					direntries[entry.dir] = append(entries, entry)
+					if !ok {
+						directories = append(directories, entry.dir)
+					}
 				}
+				list.entries = nil
+				sort.Stable(sort.Reverse(sort.StringSlice(directories)))
+				for _, dir := range directories {
+					entries, _ := direntries[dir]
+
+					sort.Stable(SortedByName(entries))
+					switch newsort {
+					case SORT_BY_MODTIME:
+						sort.Stable(SortedByModTime(entries))
+					case SORT_BY_SIZE:
+						sort.Stable(SortedBySize(entries))
+					}
+					list.entries = sortMerge(newsort, list.entries, entries)
+
+					// sort.Stable(SortedByName(direntries[dir]))
+					// list.entries = append(list.entries, direntries[dir]...)
+				}
+
+				//sort.Stable(SortedByModTime(list.entries))
+
 			} else if olddirection != newdirection {
 				for i := len(list.entries)/2 - 1; i >= 0; i-- {
 					opp := len(list.entries) - 1 - i
