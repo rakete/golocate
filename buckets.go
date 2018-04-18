@@ -508,25 +508,35 @@ func WalkNodesRecur(parent Bucket, bucket Bucket, direction gtk.SortType, f func
 	return ret
 }
 
-func Print(bucket Bucket, level int) {
+func PrintBucket(bucket Bucket, level int) {
 	node := bucket.Node()
 
 	for _, child := range node.children {
 		childnode := child.Node()
-		for i := 0; i < level; i++ {
-			fmt.Print(" ")
-		}
 
-		if len(childnode.children) > 0 {
-			fmt.Println("parent:", childnode.threshold)
-			Print(child, level+1)
-		} else {
+		if level < 0 {
 			if childnode.threshold == nil {
-				fmt.Println("maximum", "numfiles:", len(childnode.queue)+len(childnode.sorted))
+				fmt.Println("maximum", "numfiles:", childnode.NumFiles())
 			} else {
-				fmt.Println(childnode.threshold.String(), "numfiles:", len(childnode.queue)+len(childnode.sorted))
+				fmt.Println(childnode.threshold.String(), "numfiles:", childnode.NumFiles())
+			}
+		} else {
+			for i := 0; i < level; i++ {
+				fmt.Print(" ")
+			}
+
+			if len(childnode.children) > 0 {
+				fmt.Println("parent:", childnode.threshold, "numfiles:", childnode.NumFiles())
+				PrintBucket(child, level+1)
+			} else {
+				if childnode.threshold == nil {
+					fmt.Println("maximum", "numfiles:", len(childnode.queue)+len(childnode.sorted))
+				} else {
+					fmt.Println(childnode.threshold.String(), "numfiles:", len(childnode.queue)+len(childnode.sorted))
+				}
 			}
 		}
+
 	}
 }
 
