@@ -181,7 +181,6 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 }
 
 func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, newsort SortColumn, newdirection gtk.SortType, n int) {
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	glib.IdleAdd(func() {
@@ -388,11 +387,15 @@ func Controller(list *ViewList, mem ResultMemory, view View) {
 	for {
 		select {
 		case <-view.more:
-			n += inc
-			lastpoll = time.Unix(0, 0)
+			listlength := list.store.IterNChildren(nil)
+			if listlength >= n {
+				n += inc
+				lastpoll = time.Unix(0, 0)
+			} else {
+				n = inc
+			}
 		case <-view.reset:
 			n = inc
-			lastpoll = time.Unix(0, 0)
 		case searchterm := <-view.searchterm:
 			query, err := regexp.Compile(searchterm)
 			if err == nil {
@@ -420,7 +423,7 @@ func Controller(list *ViewList, mem ResultMemory, view View) {
 				instantSort(list, oldsort, olddirection, currentsort, currentdirection, n)
 				lastpoll = time.Unix(0, 0)
 			}
-		case <-time.After(1000 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 		}
 
 		var currentbucket Bucket
