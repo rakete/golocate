@@ -327,6 +327,20 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 		}
 	}()
 
+	for _, dir := range directories {
+		newdirs <- dir
+		wg.Done()
+	}
+
 	wg.Done()
-	<-finish
+	wg.Wait()
+
+	for {
+		select {
+		case <-finish:
+			return
+		case <-time.After(1000 * time.Millisecond):
+			//log.Println("crawl some more")
+		}
+	}
 }
