@@ -103,6 +103,7 @@ func testMatchCaches(dircache Cache, namecache Cache, entry *FileEntry, query *r
 type CrawlResult interface {
 	Merge(sortcolumn SortColumn, files []*FileEntry)
 	Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry)
+	Remove(sortcolumn SortColumn, files []*FileEntry)
 	NumFiles() int
 }
 
@@ -184,6 +185,9 @@ sortedloop:
 	if !aborted {
 		results <- nil
 	}
+}
+
+func (entries *FileEntries) Remove(sortcolumn SortColumn, files []*FileEntry) {
 }
 
 func (entries *FileEntries) NumFiles() int {

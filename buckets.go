@@ -308,6 +308,10 @@ func (node *Node) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.S
 	})
 }
 
+func (node *Node) Remove(sortcolumn SortColumn, files []*FileEntry) {
+	Delete(sortcolumn, node, 0, files)
+}
+
 func (node *Node) NumFiles() int {
 	num := 0
 	for _, child := range node.children {
@@ -538,13 +542,12 @@ childrenloop:
 		childnode := child.Node()
 
 		childnode.queuemutex.Lock()
+
 		for i < len(files) && child.Less(files[i]) {
-			childnode.lastchange = time.Now()
 			if len(childnode.children) > 0 {
-				//childnode.queuemutex.Unlock()
 				i = Insert(sortcolumn, child, i, files)
-				//childnode.queuemutex.Lock()
 			} else {
+				childnode.lastchange = time.Now()
 				childnode.queue = append(childnode.queue, files[i])
 				i += 1
 			}
@@ -556,6 +559,86 @@ childrenloop:
 			childnode.sortedmutex.Unlock()
 		}
 		childnode.queuemutex.Unlock()
+
+		if i >= len(files) {
+			break childrenloop
+		}
+	}
+
+	return i
+}
+
+func Delete(sortcolumn SortColumn, bucket Bucket, first int, files []*FileEntry) int {
+	node := bucket.Node()
+	node.lastchange = time.Now()
+
+	searchfunc := func(a, b *FileEntry) bool {
+		aname := NameThreshold(a.name)
+		bname := NameThreshold(b.name)
+		adir := DirThreshold(a.dir)
+		bdir := DirThreshold(b.dir)
+
+		switch sortcolumn {
+		case SORT_BY_NAME:
+			return !aname.Less(bname) || (aname.Equal(bname) && adir.Equal(bdir))
+		case SORT_BY_DIR:
+			return !adir.Less(bdir) || (aname.Equal(bname) && adir.Equal(bdir))
+		case SORT_BY_MODTIME:
+			amodtime := ModTimeThreshold(a.modtime)
+			bmodtime := ModTimeThreshold(b.modtime)
+			return (amodtime.Equal(bmodtime) || !amodtime.Less(bmodtime)) || (aname.Equal(bname) && adir.Equal(bdir))
+		case SORT_BY_SIZE:
+			asize := SizeThreshold(a.size)
+			bsize := SizeThreshold(b.size)
+			return (asize.Equal(bsize) || !asize.Less(bsize)) || (aname.Equal(bname) && adir.Equal(bdir))
+		}
+
+		return true
+	}
+
+	i := first
+childrenloop:
+	for _, child := range node.children {
+		childnode := child.Node()
+
+		childnode.queuemutex.Lock()
+		child.Sort(sortcolumn)
+		childnode.queuemutex.Unlock()
+
+		childnode.sortedmutex.Lock()
+		start := 0
+		newsorted := childnode.sorted[:0]
+		for i < len(files) && child.Less(files[i]) {
+			if len(childnode.children) > 0 {
+				i = Delete(sortcolumn, child, i, files)
+			} else {
+				n := len(childnode.sorted) - start
+				amount := sort.Search(n, func(testindex int) bool {
+					a := childnode.sorted[start+testindex]
+					b := files[i]
+					ret := searchfunc(a, b)
+					return ret
+				})
+
+				if amount == n {
+					panic("this should not happen")
+				}
+
+				if amount >= 0 {
+					childnode.lastchange = time.Now()
+					newsorted = append(newsorted, childnode.sorted[start:start+amount]...)
+				}
+
+				start += amount + 1
+				i += 1
+			}
+		}
+
+		if start > 0 {
+			newsorted = append(newsorted, childnode.sorted[start:len(childnode.sorted)]...)
+			childnode.sorted = newsorted
+		}
+		childnode.sortedmutex.Unlock()
 
 		if i >= len(files) {
 			break childrenloop
