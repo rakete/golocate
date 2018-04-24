@@ -289,25 +289,8 @@ func (node *Node) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.S
 			default:
 				index := indexfunc(l, i)
 				entry := sorted[index]
-				entryname := entry.name
-				entrydir := entry.dir
 
-				var matchedname, knownname, matcheddir, knowndir bool
-				if query != nil {
-					matchedname, knownname = namecache.Test(entryname)
-					matcheddir, knowndir = dircache.Test(entrydir)
-
-					if !matchedname && !matcheddir {
-						if !knownname {
-							matchedname = query.MatchString(entryname)
-							namecache.Put(entryname, matchedname)
-						}
-						if !knowndir && !matchedname {
-							matcheddir = query.MatchString(entrydir)
-							dircache.Put(entrydir, matcheddir)
-						}
-					}
-				}
+				matchedname, matcheddir := testMatchCaches(dircache, namecache, entry, query)
 
 				if query == nil || matchedname || matcheddir {
 					results <- entry

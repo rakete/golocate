@@ -79,6 +79,27 @@ type MatchCaches struct {
 	names Cache
 }
 
+func testMatchCaches(dircache Cache, namecache Cache, entry *FileEntry, query *regexp.Regexp) (bool, bool) {
+	matchedname, knownname, matcheddir, knowndir := true, true, false, false
+	if query != nil {
+		matchedname, knownname = namecache.Test(entry.name)
+		matcheddir, knowndir = dircache.Test(entry.dir)
+
+		if !matchedname && !matcheddir {
+			if !knownname {
+				matchedname = query.MatchString(entry.name)
+				namecache.Put(entry.name, matchedname)
+			}
+			if !knowndir && !matchedname {
+				matcheddir = query.MatchString(entry.dir)
+				dircache.Put(entry.dir, matcheddir)
+			}
+		}
+	}
+
+	return matchedname, matcheddir
+}
+
 type CrawlResult interface {
 	Merge(sortcolumn SortColumn, files []*FileEntry)
 	Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry)
@@ -145,27 +166,8 @@ sortedloop:
 		default:
 
 			index := indexfunc(l, i)
-
 			entry := entries.sorted[index]
-			entryname := entry.name
-			entrydir := entry.dir
-
-			var matchedname, knownname, matcheddir, knowndir bool
-			if query != nil {
-				matchedname, knownname = namecache.Test(entryname)
-				matcheddir, knowndir = dircache.Test(entrydir)
-
-				if !matchedname && !matcheddir {
-					if !knownname {
-						matchedname = query.MatchString(entryname)
-						namecache.Put(entryname, matchedname)
-					}
-					if !knowndir && !matchedname {
-						matcheddir = query.MatchString(entrydir)
-						dircache.Put(entrydir, matcheddir)
-					}
-				}
-			}
+			matchedname, matcheddir := testMatchCaches(dircache, namecache, entry, query)
 
 			if query == nil || matchedname || matcheddir {
 				results <- entry
