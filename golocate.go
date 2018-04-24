@@ -8,7 +8,10 @@ import (
 	"runtime"
 	"sync"
 	//"syscall"
+	"io/ioutil"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	glib "github.com/gotk3/gotk3/glib"
@@ -319,6 +322,8 @@ func updateList(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 
 			list.entries = make([]*FileEntry, len(newentries))
 			copy(list.entries, newentries)
+
+			list.query <- query
 			//list.mutex.Unlock()
 
 			wg.Done()
@@ -359,6 +364,7 @@ type ViewList struct {
 	store   *gtk.ListStore
 	entries []*FileEntry
 	mutex   *sync.Mutex
+	query   chan *regexp.Regexp
 }
 
 type ViewSort struct {
@@ -480,6 +486,12 @@ func createColumnSortToggle(treeview *gtk.TreeView, clickedcolumn int, viewsortc
 	}
 }
 
+type Configuration struct {
+	cores       int
+	directories []string
+	maxinotify  int
+}
+
 func main() {
 	runtime.LockOSThread()
 
@@ -491,19 +503,27 @@ func main() {
 		log.Fatal("Could not create application:", err)
 	}
 
-	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
-
 	mem := ResultMemory{
 		NewNameBucket(),
 		NewDirBucket(),
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	newdirs := make(chan string)
-	finish := make(chan struct{})
-	cores := runtime.NumCPU()
+	config := Configuration{
+		cores:       runtime.NumCPU(),
+		directories: []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"},
+		maxinotify:  1024,
+	}
 
-	view := View{make(chan ViewSort), make(chan struct{}), make(chan struct{}), make(chan string)}
+	maxinotifybytes, readerr := ioutil.ReadFile("/proc/sys/fs/inotify/max_user_watches")
+	if readerr == nil {
+		maxinotifystring := strings.TrimSpace(string(maxinotifybytes))
+
+		maxinotifyint64, converr := strconv.ParseUint(maxinotifystring, 10, 32)
+		if converr == nil {
+			config.maxinotify = int(maxinotifyint64) / 2
+		}
+	}
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
@@ -511,25 +531,41 @@ func main() {
 		_, scrollwin, searchentry := setupWindow(application, treeview, "golocate")
 		searchentry.GrabFocus()
 
+		viewcontrols := ViewControls{
+			sort:       make(chan ViewSort),
+			more:       make(chan struct{}),
+			reset:      make(chan struct{}),
+			searchterm: make(chan string),
+		}
+
 		viewlist := ViewList{
 			store:   liststore,
 			entries: nil,
 			mutex:   new(sync.Mutex),
+			query:   make(chan *regexp.Regexp, 1),
 		}
-		go Controller(&viewlist, mem, view)
+
+		go Controller(mem, viewcontrols, &viewlist)
+
+		crawlernewdirs := make(chan string)
+		crawlerupdates := make(chan CrawlUpdate)
+		crawlerfinish := make(chan struct{})
+		log.Println("starting Crawl on", config.cores, "cores")
+		wg.Add(1)
+		go Crawler(&wg, mem, config, crawlernewdirs, viewlist.query, crawlerupdates, crawlerfinish)
 
 		for i := 0; i < int(treeview.GetNColumns()); i++ {
 			column := treeview.GetColumn(i)
 			title := column.GetTitle()
 			switch title {
 			case "Name":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_NAME))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, viewcontrols.sort, SORT_BY_NAME))
 			case "Dir":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_DIR))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, viewcontrols.sort, SORT_BY_DIR))
 			case "Size":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_SIZE))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, viewcontrols.sort, SORT_BY_SIZE))
 			case "Modification Time":
-				column.Connect("clicked", createColumnSortToggle(treeview, i, view.sort, SORT_BY_MODTIME))
+				column.Connect("clicked", createColumnSortToggle(treeview, i, viewcontrols.sort, SORT_BY_MODTIME))
 			default:
 				column.Connect("clicked", func() {
 					log.Println("can not sort by", title)
@@ -542,14 +578,10 @@ func main() {
 			if err == nil {
 				text, err := buffer.GetText()
 				if err == nil {
-					view.searchterm <- text
+					viewcontrols.searchterm <- text
 				}
 			}
 		})
-
-		log.Println("starting Crawl on", cores, "cores")
-		wg.Add(1)
-		go Crawler(&wg, cores, mem, newdirs, finish, directories)
 
 		lastupper := -1.0
 		adjustment := scrollwin.GetVAdjustment()
@@ -569,28 +601,23 @@ func main() {
 			upper := adjustment.GetUpper()
 			if upper < lastupper {
 				lastupper = -1.0
-				view.reset <- struct{}{}
+				viewcontrols.reset <- struct{}{}
 			}
 			if upper > lastupper && (adjustment.GetValue()+adjustment.GetPageSize()) > (adjustment.GetUpper()/4)*3 {
 				lastupper = upper
-				view.more <- struct{}{}
+				viewcontrols.more <- struct{}{}
 			}
 		})
 
 		aCrawl := glib.SimpleActionNew("crawl", nil)
 		aCrawl.Connect("activate", func() {
-			go func() {
-				for _, dir := range directories {
-					newdirs <- dir
-				}
-			}()
 		})
 		application.AddAction(aCrawl)
 
 		aQuit := glib.SimpleActionNew("quit", nil)
 		aQuit.Connect("activate", func() {
-			close(finish)
-			<-finish
+			close(crawlerfinish)
+			<-crawlerfinish
 			log.Println("Crawl terminated")
 			application.Quit()
 		})

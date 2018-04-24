@@ -236,18 +236,39 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 	defer wg.Done()
 }
 
-func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan string, finish chan struct{}, directories []string) {
-	wg.Add(len(directories))
+type CrawlUpdate struct {
+	dirs  []string
+	files []*FileEntry
+}
+
+type DirAge struct {
+	dir string
+	age time.Time
+}
+
+func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs chan string, query chan *regexp.Regexp, updates chan CrawlUpdate, finish chan struct{}) {
+	wg.Add(len(config.directories))
 
 	collect := FilesChannel{make(chan SortedByName), make(chan SortedByDir), make(chan SortedByModTime), make(chan SortedBySize)}
-	maxproc := make(chan struct{}, cores)
+	maxproc := make(chan struct{}, config.cores)
+	dirages := make(map[string]time.Time)
+	var currentquery *regexp.Regexp
 	go func() {
 		for {
 			select {
 			case dir := <-newdirs:
 				wg.Add(1)
 				maxproc <- struct{}{}
+
+				_, ageknown := dirages[dir]
+				if !ageknown {
+					if dirinfo, err := os.Lstat(dir); err == nil {
+						dirages[dir] = dirinfo.ModTime()
+					}
+				}
+
 				go visit(wg, maxproc, newdirs, collect, dir)
+			case currentquery = <-query:
 			case <-finish:
 				return
 			}
@@ -279,7 +300,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 				newbydir := make([]*FileEntry, len(files))
 				copy(newbydir, files)
 
-				sort.Stable(SortedByDir(newbydir))
+				//sort.Stable(SortedByDir(newbydir))
 				mem.bydir.Merge(SORT_BY_DIR, newbydir)
 
 				wg.Done()
@@ -306,10 +327,19 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 		}
 	}()
 
+	dirnumfiles := make(map[string]int)
+	latestmodtime := time.Unix(0, 0)
 	go func() {
 		for {
 			select {
 			case files := <-collect.bysize:
+				dirnumfiles[files[0].dir] += len(files)
+				for _, entry := range files {
+					if entry.modtime.After(latestmodtime) {
+						latestmodtime = entry.modtime
+					}
+				}
+
 				newbysize := make([]*FileEntry, len(files))
 				copy(newbysize, files)
 
@@ -323,7 +353,7 @@ func Crawler(wg *sync.WaitGroup, cores int, mem ResultMemory, newdirs chan strin
 		}
 	}()
 
-	for _, dir := range directories {
+	for _, dir := range config.directories {
 		newdirs <- dir
 		wg.Done()
 	}
