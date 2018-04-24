@@ -1,19 +1,16 @@
 package main
 
 import (
-	"log"
+	//"log"
+	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
-	//"strconv"
-	"io/ioutil"
+	"sort"
 	"sync"
 	"time"
-	//"gotk3/gtk"
-	//"fmt"
-	"sort"
 
-	"github.com/gotk3/gotk3/gtk"
+	gtk "github.com/gotk3/gotk3/gtk"
 )
 
 type FileEntry struct {
@@ -195,28 +192,20 @@ func (entries *FileEntries) NumFiles() int {
 }
 
 func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, collect FilesChannel, dir string) {
-	entries, err := ioutil.ReadDir(dir)
+	infos, err := ioutil.ReadDir(dir)
 	<-maxproc
 
 	if err != nil {
 		//log.Println("Could not read directory:", err)
 	} else {
 		wg.Add(4)
+		fileentries := make([]*FileEntry, len(infos))
+		numfiles := 0
 
-		var matches []string
-		for _, entry := range entries {
-			entrypath := path.Join(dir, entry.Name())
-			if entry.IsDir() {
+		for _, fileinfo := range infos {
+			entrypath := path.Join(dir, fileinfo.Name())
+			if fileinfo.IsDir() {
 				newdirs <- entrypath
-			} else {
-				matches = append(matches, entrypath)
-			}
-		}
-
-		var files []*FileEntry
-		for _, entrypath := range matches {
-			if fileinfo, err := os.Lstat(entrypath); err != nil {
-				log.Println("Could not read file:", err)
 			} else {
 				entry := &FileEntry{
 					dir:     dir,
@@ -224,15 +213,16 @@ func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, colle
 					modtime: fileinfo.ModTime(),
 					size:    fileinfo.Size(),
 				}
-				files = append(files, entry)
+				fileentries[numfiles] = entry
+				numfiles += 1
 			}
 		}
 
-		if len(files) > 0 {
-			collect.byname <- files
-			collect.bydir <- files
-			collect.bymodtime <- files
-			collect.bysize <- files
+		if numfiles > 0 {
+			collect.byname <- fileentries[:numfiles]
+			collect.bydir <- fileentries[:numfiles]
+			collect.bymodtime <- fileentries[:numfiles]
+			collect.bysize <- fileentries[:numfiles]
 		} else {
 			defer func() {
 				wg.Done()
