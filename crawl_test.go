@@ -27,17 +27,20 @@ func TestFileEntries(t *testing.T) {
 		new(FileEntries),
 		new(FileEntries),
 	}
+	config := Configuration{
+		cores:       runtime.NumCPU(),
+		directories: []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"},
+		maxinotify:  1024,
+	}
+	newdirs := make(chan string)
+	crawlerupdates := make(chan CrawlUpdate)
+	crawlerquery := make(chan *regexp.Regexp)
 	finish := make(chan struct{})
 
-	//directories := []string{os.Getenv("HOME")}
-	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
-	newdirs := make(chan string)
-	cores := runtime.NumCPU()
-
 	var wg sync.WaitGroup
-	log.Println("starting Crawl on", cores, "cores")
+	log.Println("starting Crawl on", config.cores, "cores")
 	wg.Add(1)
-	go Crawler(&wg, cores*2, mem, newdirs, finish, directories)
+	go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
 	wg.Wait()
 	close(finish)
 	log.Println("Crawl terminated")
@@ -89,16 +92,21 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		new(FileEntries),
 		new(FileEntries),
 	}
-	directories := []string{path.Join(os.Getenv("GOPATH"))}
+	config := Configuration{
+		cores:       runtime.NumCPU(),
+		directories: []string{path.Join(os.Getenv("GOPATH"))},
+		maxinotify:  1024,
+	}
 	newdirs := make(chan string)
+	crawlerupdates := make(chan CrawlUpdate)
+	crawlerquery := make(chan *regexp.Regexp)
 
-	cores := runtime.NumCPU()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go Crawler(&wg, cores, mem, newdirs, finish, directories)
+		go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
 		time.Sleep(10 * time.Millisecond)
 		wg.Wait()
 		close(finish)
@@ -132,16 +140,21 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	directories := []string{path.Join(os.Getenv("GOPATH"))}
+	config := Configuration{
+		cores:       runtime.NumCPU(),
+		directories: []string{path.Join(os.Getenv("GOPATH"))},
+		maxinotify:  1024,
+	}
 	newdirs := make(chan string)
+	crawlerupdates := make(chan CrawlUpdate)
+	crawlerquery := make(chan *regexp.Regexp)
 
-	cores := runtime.NumCPU()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go Crawler(&wg, cores, mem, newdirs, finish, directories)
+		go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
 		time.Sleep(10 * time.Millisecond)
 		wg.Wait()
 		close(finish)

@@ -27,21 +27,24 @@ func TestBuckets(t *testing.T) {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	finish := make(chan struct{})
-
-	//directories := []string{os.Getenv("HOME")}
-	directories := []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"}
+	config := Configuration{
+		cores:       runtime.NumCPU(),
+		directories: []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"},
+		maxinotify:  1024,
+	}
 	if testing.Short() {
-		directories = []string{os.Getenv("HOME")}
+		config.directories = []string{os.Getenv("HOME")}
 	}
 
 	newdirs := make(chan string)
-	cores := runtime.NumCPU()
-
+	crawlerupdates := make(chan CrawlUpdate)
+	crawlerquery := make(chan *regexp.Regexp)
 	var wg sync.WaitGroup
-	log.Println("starting Crawl on", cores, "cores")
+
+	log.Println("starting Crawl on", config.cores, "cores")
+	finish := make(chan struct{})
 	wg.Add(1)
-	go Crawler(&wg, cores*2, mem, newdirs, finish, directories)
+	go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
 	wg.Wait()
 	close(finish)
 	log.Println("Crawl terminated")
@@ -195,15 +198,20 @@ func BenchmarkRegexpBuiltin(b *testing.B) {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	directories := []string{path.Join(os.Getenv("GOPATH"))}
+	config := Configuration{
+		cores:       runtime.NumCPU(),
+		directories: []string{path.Join(os.Getenv("GOPATH"))},
+		maxinotify:  1024,
+	}
 	newdirs := make(chan string)
-
-	cores := runtime.NumCPU()
+	crawlerupdates := make(chan CrawlUpdate)
+	crawlerquery := make(chan *regexp.Regexp)
+	var wg sync.WaitGroup
 
 	finish := make(chan struct{})
-	var wg sync.WaitGroup
 	wg.Add(1)
-	go Crawler(&wg, cores, mem, newdirs, finish, directories)
+	go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
+	time.Sleep(10 * time.Millisecond)
 	wg.Wait()
 	close(finish)
 
@@ -245,15 +253,20 @@ func BenchmarkRegexpPCRE(b *testing.B) {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	directories := []string{path.Join(os.Getenv("GOPATH"))}
-	newdirs := make(chan string)
+	config := Configuration{
+		cores:       runtime.NumCPU(),
+		directories: []string{path.Join(os.Getenv("GOPATH"))},
+		maxinotify:  1024,
+	}
 
-	cores := runtime.NumCPU()
+	newdirs := make(chan string)
+	crawlerupdates := make(chan CrawlUpdate)
+	crawlerquery := make(chan *regexp.Regexp)
+	var wg sync.WaitGroup
 
 	finish := make(chan struct{})
-	var wg sync.WaitGroup
 	wg.Add(1)
-	go Crawler(&wg, cores, mem, newdirs, finish, directories)
+	go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
 	wg.Wait()
 	close(finish)
 
@@ -319,20 +332,25 @@ func BenchmarkTake(b *testing.B) {
 		NewModTimeBucket(),
 		NewSizeBucket(),
 	}
-	directories := []string{path.Join(os.Getenv("GOPATH")), "/tmp", "/etc", "/usr"}
+	config := Configuration{
+		cores:       runtime.NumCPU(),
+		directories: []string{path.Join(os.Getenv("GOPATH")), "/tmp", "/etc", "/usr"},
+		maxinotify:  1024,
+	}
 	newdirs := make(chan string)
-
-	cores := runtime.NumCPU()
-	finish := make(chan struct{})
+	crawlerupdates := make(chan CrawlUpdate)
+	crawlerquery := make(chan *regexp.Regexp)
 	var wg sync.WaitGroup
+
+	finish := make(chan struct{})
 	wg.Add(1)
-	go Crawler(&wg, cores, memslice, newdirs, finish, directories)
+	go Crawler(&wg, memslice, config, newdirs, crawlerquery, crawlerupdates, finish)
 	wg.Wait()
 	close(finish)
 
 	finish = make(chan struct{})
 	wg.Add(1)
-	go Crawler(&wg, cores, membuckets, newdirs, finish, directories)
+	go Crawler(&wg, membuckets, config, newdirs, crawlerquery, crawlerupdates, finish)
 	wg.Wait()
 	close(finish)
 
