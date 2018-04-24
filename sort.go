@@ -95,10 +95,15 @@ func sortMerge(sortcolumn SortColumn, left, right []*FileEntry) []*FileEntry {
 	// - this is so rare it might make sense to just not test it at all
 	var result []*FileEntry
 	if testRightBeforeLeft { //less(right, len(right)-1, left, 0)
-		result = append(right, left...)
+		result = right
+		result = append(result, left...)
 	} else if testLeftBeforeRight { //less(left, len(left)-1, right, 0)
-		result = append(left, right...)
+		result = left
+		result = append(result, right...)
 	} else {
+		resultmem := make([]*FileEntry, len(left)+len(right))
+		result = resultmem[:0]
+
 		// - append left and right together into queue, then operate only using indices into queue,
 		// that way I can reuse the above sort.Interface functions
 		// - notice that queue will stay the same throughout the whole process, the merging is done

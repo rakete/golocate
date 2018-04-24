@@ -200,7 +200,7 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 						directories = append(directories, entry.dir)
 					}
 				}
-				list.entries = nil
+				list.entries = list.entries[:0]
 				sort.Stable(sort.Reverse(sort.StringSlice(directories)))
 				for _, dir := range directories {
 					entries, _ := direntries[dir]
