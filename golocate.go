@@ -183,7 +183,9 @@ func updateEntry(iter *gtk.TreeIter, liststore *gtk.ListStore, entry *FileEntry)
 	}
 }
 
-func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, newsort SortColumn, newdirection gtk.SortType, n int) {
+func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, newsort SortColumn, newdirection gtk.SortType, n int) bool {
+	ret := false
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	glib.IdleAdd(func() {
@@ -238,15 +240,20 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 				i += 1
 			}
 
+			ret = true
+
 			//list.mutex.Unlock()
 		}
 
 		wg.Done()
 	})
 	wg.Wait()
+
+	return ret
 }
 
-func instantSearch(list *ViewList, query *regexp.Regexp) {
+func instantSearch(list *ViewList, query *regexp.Regexp) int {
+	ret := 0
 	var wg sync.WaitGroup
 	wg.Add(1)
 	glib.IdleAdd(func() {
@@ -258,7 +265,7 @@ func instantSearch(list *ViewList, query *regexp.Regexp) {
 		iter, valid := list.store.GetIterFirst()
 		for iter != nil && valid == true {
 
-			if query.MatchString(list.entries[i].name) || query.MatchString(list.entries[i].dir) {
+			if query == nil || query.MatchString(list.entries[i].name) || query.MatchString(list.entries[i].dir) {
 				newentries = append(newentries, list.entries[i])
 			} else {
 				removeindices = append(removeindices, i)
@@ -268,15 +275,19 @@ func instantSearch(list *ViewList, query *regexp.Regexp) {
 			i += 1
 		}
 
+		ret = i
+
 		if len(newentries) > 0 {
 			iter := new(gtk.TreeIter)
-			for offset, index := range removeindices {
-				list.store.IterNthChild(iter, nil, index-offset)
+			for nremoved, index := range removeindices {
+				list.store.IterNthChild(iter, nil, index-nremoved)
 				list.store.Remove(iter)
 			}
 
 			list.entries = make([]*FileEntry, len(newentries))
 			copy(list.entries, newentries)
+
+			ret = len(newentries)
 		}
 
 		//list.mutex.Unlock()
@@ -284,9 +295,11 @@ func instantSearch(list *ViewList, query *regexp.Regexp) {
 		wg.Done()
 	})
 	wg.Wait()
+
+	return ret
 }
 
-func updateList(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}) {
+func updateView(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}) {
 	if bucket == nil {
 		return
 	}
@@ -311,7 +324,6 @@ func updateList(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 			if i < len(newentries) {
 				for _, newentry := range newentries[i:] {
 					addEntry(list.store, newentry)
-					i += 1
 				}
 			} else {
 				for valid == true {
@@ -372,14 +384,14 @@ type ViewSort struct {
 	direction gtk.SortType
 }
 
-type View struct {
+type ViewControls struct {
 	sort       chan ViewSort
 	more       chan struct{}
 	reset      chan struct{}
 	searchterm chan string
 }
 
-func Controller(list *ViewList, mem ResultMemory, view View) {
+func Controller(mem ResultMemory, viewcontrols ViewControls, list *ViewList) {
 	currentsort := DEFAULT_SORT
 	currentdirection := DEFAULT_DIRECTION
 	var currentquery *regexp.Regexp
@@ -392,7 +404,7 @@ func Controller(list *ViewList, mem ResultMemory, view View) {
 
 	for {
 		select {
-		case <-view.more:
+		case <-viewcontrols.more:
 			listlength := list.store.IterNChildren(nil)
 			if listlength >= n {
 				n += inc
@@ -400,10 +412,15 @@ func Controller(list *ViewList, mem ResultMemory, view View) {
 			} else {
 				n = inc
 			}
-		case <-view.reset:
+		case <-viewcontrols.reset:
 			n = inc
-		case searchterm := <-view.searchterm:
-			query, err := regexp.Compile(searchterm)
+		case searchterm := <-viewcontrols.searchterm:
+			var query *regexp.Regexp
+			var err error
+			if len(searchterm) > 0 {
+				query, err = regexp.Compile(searchterm)
+			}
+
 			if err == nil {
 				currentquery = query
 
@@ -411,11 +428,14 @@ func Controller(list *ViewList, mem ResultMemory, view View) {
 				<-abort
 				abort = make(chan struct{})
 
-				instantSearch(list, currentquery)
+				listlength := instantSearch(list, currentquery)
+				for n > listlength && listlength > inc {
+					n -= inc
+				}
 				matchcaches = MatchCaches{NewSimpleCache(), NewSimpleCache()}
 				lastpoll = time.Unix(0, 0)
 			}
-		case newsort := <-view.sort:
+		case newsort := <-viewcontrols.sort:
 			if newsort.column != currentsort || newsort.direction != currentdirection {
 				oldsort := currentsort
 				olddirection := currentdirection
@@ -426,8 +446,9 @@ func Controller(list *ViewList, mem ResultMemory, view View) {
 				<-abort
 				abort = make(chan struct{})
 
-				instantSort(list, oldsort, olddirection, currentsort, currentdirection, n)
-				lastpoll = time.Unix(0, 0)
+				if !instantSort(list, oldsort, olddirection, currentsort, currentdirection, n) {
+					lastpoll = time.Unix(0, 0)
+				}
 			}
 		case <-time.After(500 * time.Millisecond):
 		}
@@ -449,7 +470,7 @@ func Controller(list *ViewList, mem ResultMemory, view View) {
 				maxproc <- struct{}{}
 				lastpoll = time.Now()
 				go func() {
-					updateList(matchcaches, currentbucket, list, currentsort, currentdirection, currentquery, n, abort)
+					updateView(matchcaches, currentbucket, list, currentsort, currentdirection, currentquery, n, abort)
 					<-maxproc
 				}()
 			} else {
