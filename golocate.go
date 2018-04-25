@@ -193,7 +193,7 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 		listlength := list.store.IterNChildren(nil)
 		if listlength < n {
 
-			//list.mutex.Lock()
+			list.mutex.Lock()
 
 			if oldsort != newsort {
 				var directories []string
@@ -218,13 +218,7 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 						sort.Stable(SortedBySize(entries))
 					}
 					list.entries = sortMerge(newsort, list.entries, entries)
-
-					// sort.Stable(SortedByName(direntries[dir]))
-					// list.entries = append(list.entries, direntries[dir]...)
 				}
-
-				//sort.Stable(SortedByModTime(list.entries))
-
 			} else if olddirection != newdirection {
 				for i := len(list.entries)/2 - 1; i >= 0; i-- {
 					opp := len(list.entries) - 1 - i
@@ -242,7 +236,7 @@ func instantSort(list *ViewList, oldsort SortColumn, olddirection gtk.SortType, 
 
 			ret = true
 
-			//list.mutex.Unlock()
+			list.mutex.Unlock()
 		}
 
 		wg.Done()
@@ -257,7 +251,7 @@ func instantSearch(list *ViewList, query *regexp.Regexp) int {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	glib.IdleAdd(func() {
-		//list.mutex.Lock()
+		list.mutex.Lock()
 
 		i := 0
 		var newentries []*FileEntry
@@ -290,7 +284,7 @@ func instantSearch(list *ViewList, query *regexp.Regexp) int {
 			ret = len(newentries)
 		}
 
-		//list.mutex.Unlock()
+		list.mutex.Unlock()
 
 		wg.Done()
 	})
@@ -310,7 +304,7 @@ func updateView(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 	display := func(newentries []*FileEntry) {
 		wg.Add(1)
 		glib.IdleAdd(func() {
-			//list.mutex.Lock()
+			list.mutex.Lock()
 			log.Println("displaying", len(newentries), "entries")
 
 			i := 0
@@ -336,7 +330,7 @@ func updateView(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 			copy(list.entries, newentries)
 
 			list.query <- query
-			//list.mutex.Unlock()
+			list.mutex.Unlock()
 
 			wg.Done()
 		})
