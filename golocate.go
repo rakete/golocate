@@ -543,8 +543,16 @@ func main() {
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
 		treeview, liststore := setupTreeView()
-		_, scrollwin, searchentry := setupWindow(application, treeview, "golocate")
+		applicationwin, scrollwin, searchentry := setupWindow(application, treeview, "golocate")
 		searchentry.GrabFocus()
+
+		applicationwin.Connect("focus-in-event", func() {
+			log.Println("focus-in-event")
+		})
+
+		applicationwin.Connect("focus-out-event", func() {
+			log.Println("focus-out-event")
+		})
 
 		viewcontrols := ViewControls{
 			sort:       make(chan ViewSort),
