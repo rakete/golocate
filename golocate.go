@@ -571,11 +571,10 @@ func main() {
 		go Controller(mem, viewcontrols, &viewlist)
 
 		crawlernewdirs := make(chan string)
-		crawlerupdates := make(chan CrawlUpdate)
 		crawlerfinish := make(chan struct{})
 		log.Println("starting Crawl on", config.cores, "cores")
 		wg.Add(1)
-		go Crawler(&wg, mem, config, crawlernewdirs, viewlist.query, crawlerupdates, crawlerfinish)
+		go Crawler(&wg, mem, config, crawlernewdirs, viewlist.query, crawlerfinish)
 
 		for i := 0; i < int(treeview.GetNColumns()); i++ {
 			column := treeview.GetColumn(i)

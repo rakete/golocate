@@ -37,14 +37,13 @@ func TestBuckets(t *testing.T) {
 	}
 
 	newdirs := make(chan string)
-	crawlerupdates := make(chan CrawlUpdate)
 	crawlerquery := make(chan *regexp.Regexp)
 	var wg sync.WaitGroup
 
 	log.Println("starting Crawl on", config.cores, "cores")
 	finish := make(chan struct{})
 	wg.Add(1)
-	go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
+	go Crawler(&wg, mem, config, newdirs, crawlerquery, finish)
 	wg.Wait()
 	close(finish)
 	log.Println("Crawl terminated")
@@ -204,13 +203,12 @@ func BenchmarkRegexpBuiltin(b *testing.B) {
 		maxinotify:  1024,
 	}
 	newdirs := make(chan string)
-	crawlerupdates := make(chan CrawlUpdate)
 	crawlerquery := make(chan *regexp.Regexp)
 	var wg sync.WaitGroup
 
 	finish := make(chan struct{})
 	wg.Add(1)
-	go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
+	go Crawler(&wg, mem, config, newdirs, crawlerquery, finish)
 	time.Sleep(10 * time.Millisecond)
 	wg.Wait()
 	close(finish)
@@ -260,13 +258,13 @@ func BenchmarkRegexpPCRE(b *testing.B) {
 	}
 
 	newdirs := make(chan string)
-	crawlerupdates := make(chan CrawlUpdate)
 	crawlerquery := make(chan *regexp.Regexp)
 	var wg sync.WaitGroup
 
 	finish := make(chan struct{})
 	wg.Add(1)
-	go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
+	go Crawler(&wg, mem, config, newdirs, crawlerquery, finish)
+	time.Sleep(10 * time.Millisecond)
 	wg.Wait()
 	close(finish)
 
@@ -334,24 +332,25 @@ func BenchmarkTake(b *testing.B) {
 	}
 	config := Configuration{
 		cores:       runtime.NumCPU(),
-		directories: []string{path.Join(os.Getenv("GOPATH")), "/tmp", "/etc", "/usr"},
+		directories: []string{path.Join(os.Getenv("HOME")), "/tmp", "/etc", "/usr"},
 		maxinotify:  1024,
 	}
 	newdirs := make(chan string)
-	crawlerupdates := make(chan CrawlUpdate)
 	crawlerquery := make(chan *regexp.Regexp)
-	var wg sync.WaitGroup
+	var wg1, wg2 sync.WaitGroup
 
 	finish := make(chan struct{})
-	wg.Add(1)
-	go Crawler(&wg, memslice, config, newdirs, crawlerquery, crawlerupdates, finish)
-	wg.Wait()
+	wg1.Add(1)
+	go Crawler(&wg1, memslice, config, newdirs, crawlerquery, finish)
+	time.Sleep(100 * time.Millisecond)
+	wg1.Wait()
 	close(finish)
 
 	finish = make(chan struct{})
-	wg.Add(1)
-	go Crawler(&wg, membuckets, config, newdirs, crawlerquery, crawlerupdates, finish)
-	wg.Wait()
+	wg2.Add(1)
+	go Crawler(&wg2, membuckets, config, newdirs, crawlerquery, finish)
+	time.Sleep(100 * time.Millisecond)
+	wg2.Wait()
 	close(finish)
 
 	searchterm := ".*\\.go$"
@@ -392,6 +391,7 @@ func BenchmarkTake(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				go taker(&entries)
 				bm.mem.Take(cache, bm.sorting, bm.direction, bm.query, bm.n, abort, taken)
+				entries = nil
 			}
 		})
 	}

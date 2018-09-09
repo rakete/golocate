@@ -33,14 +33,13 @@ func TestFileEntries(t *testing.T) {
 		maxinotify:  1024,
 	}
 	newdirs := make(chan string)
-	crawlerupdates := make(chan CrawlUpdate)
 	crawlerquery := make(chan *regexp.Regexp)
 	finish := make(chan struct{})
 
 	var wg sync.WaitGroup
 	log.Println("starting Crawl on", config.cores, "cores")
 	wg.Add(1)
-	go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
+	go Crawler(&wg, mem, config, newdirs, crawlerquery, finish)
 	wg.Wait()
 	close(finish)
 	log.Println("Crawl terminated")
@@ -98,7 +97,6 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		maxinotify:  1024,
 	}
 	newdirs := make(chan string)
-	crawlerupdates := make(chan CrawlUpdate)
 	crawlerquery := make(chan *regexp.Regexp)
 
 	b.StartTimer()
@@ -106,7 +104,7 @@ func BenchmarkCrawlLargeSlice(b *testing.B) {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
+		go Crawler(&wg, mem, config, newdirs, crawlerquery, finish)
 		time.Sleep(10 * time.Millisecond)
 		wg.Wait()
 		close(finish)
@@ -146,7 +144,6 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		maxinotify:  1024,
 	}
 	newdirs := make(chan string)
-	crawlerupdates := make(chan CrawlUpdate)
 	crawlerquery := make(chan *regexp.Regexp)
 
 	b.StartTimer()
@@ -154,7 +151,7 @@ func BenchmarkCrawlBuckets(b *testing.B) {
 		finish := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		go Crawler(&wg, mem, config, newdirs, crawlerquery, crawlerupdates, finish)
+		go Crawler(&wg, mem, config, newdirs, crawlerquery, finish)
 		time.Sleep(10 * time.Millisecond)
 		wg.Wait()
 		close(finish)

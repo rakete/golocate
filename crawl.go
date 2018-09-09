@@ -1,8 +1,9 @@
 package main
 
 import (
-	//"log"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"regexp"
@@ -10,7 +11,9 @@ import (
 	"sync"
 	"time"
 
+	fsnotify "github.com/fsnotify/fsnotify"
 	gtk "github.com/gotk3/gotk3/gtk"
+	sys "golang.org/x/sys/unix"
 )
 
 type FileEntry struct {
@@ -191,167 +194,283 @@ func (entries *FileEntries) NumFiles() int {
 	return len(entries.queue) + len(entries.sorted)
 }
 
-func visit(wg *sync.WaitGroup, maxproc chan struct{}, newdirs chan string, collect FilesChannel, dir string) {
-	infos, err := ioutil.ReadDir(dir)
-	<-maxproc
+func visit(wg *sync.WaitGroup, config Configuration, watcher *fsnotify.Watcher, maxwatch chan struct{}, maxproc chan struct{}, newdirs chan string, collect FilesChannel, direntry *DirEntry, dir string) {
+	relevantage := time.Now().Add(-time.Hour * 24 * 31)
 
-	if err != nil {
-		//log.Println("Could not read directory:", err)
+	maxwatch <- struct{}{}
+	watcherr := watcher.Add(dir)
+
+	if watcherr != nil {
+		<-maxwatch
 	} else {
-		wg.Add(4)
-		fileentries := make([]*FileEntry, len(infos))
-		numfiles := 0
 
-		for _, fileinfo := range infos {
-			entrypath := path.Join(dir, fileinfo.Name())
-			if fileinfo.IsDir() {
-				newdirs <- entrypath
-			} else {
-				entry := &FileEntry{
-					dir:     dir,
-					name:    fileinfo.Name(),
-					modtime: fileinfo.ModTime(),
-					size:    fileinfo.Size(),
-				}
-				fileentries[numfiles] = entry
-				numfiles += 1
-			}
+		dirinfo := new(sys.Stat_t)
+		staterr := sys.Lstat(dir, dirinfo)
+
+		var infos []os.FileInfo
+		var readerr error
+		if staterr == nil {
+			infos, readerr = ioutil.ReadDir(dir)
 		}
+		<-maxproc
 
-		if numfiles > 0 {
-			collect.byname <- fileentries[:numfiles]
-			collect.bydir <- fileentries[:numfiles]
-			collect.bymodtime <- fileentries[:numfiles]
-			collect.bysize <- fileentries[:numfiles]
+		if staterr != nil || readerr != nil {
+			watcher.Remove(dir)
+			<-maxwatch
 		} else {
-			defer func() {
-				wg.Done()
-				wg.Done()
-				wg.Done()
-				wg.Done()
-			}()
+			modtime := time.Unix(dirinfo.Mtim.Sec, dirinfo.Mtim.Nsec)
+
+			addedinotify := true
+			if len(maxwatch)+1 >= config.maxinotify || modtime.Before(relevantage) || len(infos) < 1 {
+				addedinotify = false
+				watcher.Remove(dir)
+				<-maxwatch
+			}
+
+			wg.Add(4)
+
+			fileentries := make([]*FileEntry, len(infos))
+			numfiles := 0
+
+			for _, fileinfo := range infos {
+				entrypath := path.Join(dir, fileinfo.Name())
+				if fileinfo.IsDir() {
+					newdirs <- entrypath
+				} else {
+					entry := &FileEntry{
+						dir:     dir,
+						name:    fileinfo.Name(),
+						modtime: fileinfo.ModTime(),
+						size:    fileinfo.Size(),
+					}
+					fileentries[numfiles] = entry
+					numfiles += 1
+				}
+			}
+
+			direntry.path = dir
+			direntry.modtime = modtime
+			direntry.files = fileentries[:numfiles]
+			direntry.inotify = addedinotify
+
+			if numfiles > 0 {
+				collect.byname <- fileentries[:numfiles]
+				collect.bydir <- fileentries[:numfiles]
+				collect.bymodtime <- fileentries[:numfiles]
+				collect.bysize <- fileentries[:numfiles]
+			} else {
+				defer func() {
+					wg.Done()
+					wg.Done()
+					wg.Done()
+					wg.Done()
+				}()
+			}
 		}
 	}
 
 	defer wg.Done()
 }
 
-type CrawlUpdate struct {
-	dirs  []string
-	files []*FileEntry
+func collectByName(wg *sync.WaitGroup, mem ResultMemory, collect FilesChannel, finish chan struct{}) {
+	for {
+		select {
+		case files := <-collect.byname:
+			newbyname := make([]*FileEntry, len(files))
+			copy(newbyname, files)
+
+			sort.Stable(SortedByName(newbyname))
+			mem.byname.Merge(SORT_BY_NAME, newbyname)
+
+			wg.Done()
+		case <-finish:
+			return
+		}
+	}
 }
 
-type DirAge struct {
-	dir string
-	age time.Time
+func collectByDir(wg *sync.WaitGroup, mem ResultMemory, collect FilesChannel, finish chan struct{}) {
+	for {
+		select {
+		case files := <-collect.bydir:
+			newbydir := make([]*FileEntry, len(files))
+			copy(newbydir, files)
+
+			//sort.Stable(SortedByDir(newbydir))
+			mem.bydir.Merge(SORT_BY_DIR, newbydir)
+
+			wg.Done()
+		case <-finish:
+			return
+		}
+	}
 }
 
-func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs chan string, query chan *regexp.Regexp, updates chan CrawlUpdate, finish chan struct{}) {
+func collectByModTime(wg *sync.WaitGroup, mem ResultMemory, collect FilesChannel, finish chan struct{}) {
+	for {
+		select {
+		case files := <-collect.bymodtime:
+			newbymodtime := make([]*FileEntry, len(files))
+			copy(newbymodtime, files)
+
+			sort.Stable(SortedByModTime(newbymodtime))
+			mem.bymodtime.Merge(SORT_BY_MODTIME, newbymodtime)
+
+			wg.Done()
+		case <-finish:
+			return
+		}
+	}
+}
+
+func collectBySize(wg *sync.WaitGroup, mem ResultMemory, collect FilesChannel, finish chan struct{}) {
+	for {
+		select {
+		case files := <-collect.bysize:
+			newbysize := make([]*FileEntry, len(files))
+			copy(newbysize, files)
+
+			sort.Stable(SortedBySize(newbysize))
+			mem.bysize.Merge(SORT_BY_SIZE, newbysize)
+
+			wg.Done()
+		case <-finish:
+			return
+		}
+	}
+}
+
+type DirEntry struct {
+	path    string
+	modtime time.Time
+	files   []*FileEntry
+	inotify bool
+}
+
+type Events struct {
+	name       string
+	info       *sys.Stat_t
+	timestamps []time.Time
+	ops        []fsnotify.Op
+}
+
+func queueEvent(eventqueue *sync.Map, name string, info *sys.Stat_t, op fsnotify.Op) {
+	timestamp := time.Now()
+
+	events, loaded := eventqueue.LoadOrStore(name, &Events{
+		name:       name,
+		info:       info,
+		timestamps: []time.Time{timestamp},
+		ops:        []fsnotify.Op{op},
+	})
+
+	if loaded {
+		events.(*Events).timestamps = append(events.(*Events).timestamps, timestamp)
+		events.(*Events).ops = append(events.(*Events).ops, op)
+	}
+}
+
+func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs chan string, query chan *regexp.Regexp, finish chan struct{}) {
 	wg.Add(len(config.directories))
 
-	collect := FilesChannel{make(chan SortedByName), make(chan SortedByDir), make(chan SortedByModTime), make(chan SortedBySize)}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal("could not create fsnotify watcher", err)
+	}
+	defer watcher.Close()
+
+	eventqueue := new(sync.Map)
+	go func() {
+		for {
+			select {
+			case <-finish:
+				return
+			case event := <-watcher.Events:
+				queueEvent(eventqueue, event.Name, nil, event.Op)
+			case err := <-watcher.Errors:
+				log.Println("error:", err)
+			}
+		}
+	}()
+
+	collect := FilesChannel{
+		make(chan SortedByName),
+		make(chan SortedByDir),
+		make(chan SortedByModTime),
+		make(chan SortedBySize),
+	}
+
+	// inotify:
+	// - need to start watching before first visit
+	// - after visiting first time I need to decide if I keep watching or remove watcher and poll instead
+	// - to make that decision I need to maintain a list of directories sorted by their modtime
+	// - I need to react to inotify events:
+
+	// -- write, chmod file -> lstat file, remove file, add file
+
+	// -- write dir -> remove dir, remove files, visit dir, (add dir)
+
+	// -- chmod dir -> [lstat dir, remove dir], (add dir) *
+
+	// -- create file -> lstat file, add file *
+	//                -> [lstat parent, remove parent], (add parent)
+
+	// -- create dir -> visit dir, (add dir) *
+	//               -> [lstat parent, remove parent], (add parent) +
+
+	// -- rename, remove file -> remove file
+	//                        -> [lstat parent, remove parent], (add parent) +
+
+	// -- rename, remove dir -> remove dir
+	//                       -> [lstat parent, remove parent], (add parent) +
+
+	// polling:
+	// - occasionally poll all directories that are not watched with inotify
+	// - when directory modtime after stored modtime need to remove dir from polling and start watching it with inotify
+	// - polling needs to mimic events generated by inotfy:
+	// -- if directory modtime different read directory contents
+	// --- remove all previous fileentries and visit non-recursively
+	// --- check all contained directories, when a directory is not watched by inotify and not polled then it is new, and needs to be visited
+	// -- else nothing new was created inside directory
+	// --- loop over known files, stat, when changed modtime remove from mem and add as new
+
+	maxwatch := make(chan struct{}, config.maxinotify)
 	maxproc := make(chan struct{}, config.cores)
-	dirages := make(map[string]time.Time)
+
+	direntries := make([]*DirEntry, 0, 100000)
+
 	var currentquery *regexp.Regexp
 	go func() {
 		for {
 			select {
 			case dir := <-newdirs:
-				wg.Add(1)
-				maxproc <- struct{}{}
 
-				_, ageknown := dirages[dir]
-				if !ageknown {
-					if dirinfo, err := os.Lstat(dir); err == nil {
-						dirages[dir] = dirinfo.ModTime()
+				watcherr := watcher.Add(dir)
+				if watcherr != nil {
+					//log.Println("could not start watching directory for changes", dir, watcherr)
+				} else {
+					wg.Add(1)
+					maxproc <- struct{}{}
+
+					direntry := &DirEntry{
+						inotify: false,
 					}
+
+					go visit(wg, config, watcher, maxwatch, maxproc, newdirs, collect, direntry, dir)
+					direntries = append(direntries, direntry)
 				}
 
-				go visit(wg, maxproc, newdirs, collect, dir)
 			case currentquery = <-query:
 			case <-finish:
 				return
 			}
 		}
-
 	}()
 
-	go func() {
-		for {
-			select {
-			case files := <-collect.byname:
-				newbyname := make([]*FileEntry, len(files))
-				copy(newbyname, files)
-
-				sort.Stable(SortedByName(newbyname))
-				mem.byname.Merge(SORT_BY_NAME, newbyname)
-
-				wg.Done()
-			case <-finish:
-				return
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case files := <-collect.bydir:
-				newbydir := make([]*FileEntry, len(files))
-				copy(newbydir, files)
-
-				//sort.Stable(SortedByDir(newbydir))
-				mem.bydir.Merge(SORT_BY_DIR, newbydir)
-
-				wg.Done()
-			case <-finish:
-				return
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case files := <-collect.bymodtime:
-				newbymodtime := make([]*FileEntry, len(files))
-				copy(newbymodtime, files)
-
-				sort.Stable(SortedByModTime(newbymodtime))
-				mem.bymodtime.Merge(SORT_BY_MODTIME, newbymodtime)
-
-				wg.Done()
-			case <-finish:
-				return
-			}
-		}
-	}()
-
-	dirnumfiles := make(map[string]int)
-	latestmodtime := time.Unix(0, 0)
-	go func() {
-		for {
-			select {
-			case files := <-collect.bysize:
-				dirnumfiles[files[0].dir] += len(files)
-				for _, entry := range files {
-					if entry.modtime.After(latestmodtime) {
-						latestmodtime = entry.modtime
-					}
-				}
-
-				newbysize := make([]*FileEntry, len(files))
-				copy(newbysize, files)
-
-				sort.Stable(SortedBySize(newbysize))
-				mem.bysize.Merge(SORT_BY_SIZE, newbysize)
-
-				wg.Done()
-			case <-finish:
-				return
-			}
-		}
-	}()
+	go collectByName(wg, mem, collect, finish)
+	go collectByDir(wg, mem, collect, finish)
+	go collectByModTime(wg, mem, collect, finish)
+	go collectBySize(wg, mem, collect, finish)
 
 	for _, dir := range config.directories {
 		newdirs <- dir
@@ -360,13 +479,133 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 
 	wg.Done()
 	wg.Wait()
+	log.Println(len(maxwatch))
 
+	const (
+		pollparts        = 6
+		polldirsoncount  = 5
+		pollfilesoncount = 20
+	)
+	polldirscounter := 0
+	pollfilescounter := 0
+	offset := 0
 	for {
 		select {
 		case <-finish:
 			return
 		case <-time.After(1000 * time.Millisecond):
-			//log.Println("crawl some more")
+			now := time.Now()
+
+			polldirscounter += 1
+			pollfilescounter += 1
+			if polldirscounter >= polldirsoncount {
+				pollfiles := false
+				if pollfilescounter > pollfilesoncount {
+					pollfiles = true
+				}
+
+				for _, direntry := range direntries {
+					if !direntry.inotify {
+						dirinfo := new(sys.Stat_t)
+						statdirerr := sys.Lstat(direntry.path, dirinfo)
+
+						if statdirerr != nil {
+							queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Remove)
+						} else {
+							dirmodtime := time.Unix(dirinfo.Mtim.Sec, dirinfo.Mtim.Nsec)
+							if dirmodtime.After(direntry.modtime) {
+								queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Write)
+							} else if pollfiles && len(direntry.files) > 0 {
+
+								start := offset
+								inc := pollparts
+								if len(direntry.files) < pollparts {
+									start = 0
+									inc = 1
+								}
+
+							statfilesloop:
+								for i := start; i < len(direntry.files); i += inc {
+									fileentry := direntry.files[i]
+
+									filepath := path.Join(fileentry.dir, fileentry.name)
+									fileinfo := new(sys.Stat_t)
+									statfileerr := sys.Lstat(filepath, fileinfo)
+
+									if statfileerr != nil {
+										queueEvent(eventqueue, filepath, fileinfo, fsnotify.Remove)
+									} else {
+										filemodtime := time.Unix(fileinfo.Mtim.Sec, fileinfo.Mtim.Nsec)
+										if filemodtime.After(fileentry.modtime) {
+											queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Write)
+											break statfilesloop
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+
+				offset += 1
+				if offset >= pollparts {
+					offset = 0
+				}
+
+				polldirscounter = 0
+				if pollfiles {
+					pollfilescounter = 0
+				}
+			}
+
+			var currentevents []Events
+			eventqueue.Range(func(name, events interface{}) bool {
+				ops := events.(*Events).ops
+
+				if len(ops) > 0 {
+					timestamps := events.(*Events).timestamps
+					lastchange := events.(*Events).timestamps[len(timestamps)-1]
+
+					if lastchange.Before(now.Add(-time.Millisecond * 500)) {
+						currentevents = append(currentevents, *events.(*Events))
+						eventqueue.Delete(name)
+					}
+				}
+				return true
+			})
+
+			const (
+				UPDATE int = iota
+				NEWDIR
+				REMOVE
+			)
+
+			if len(currentevents) > 0 {
+				fmt.Println(now)
+				for _, events := range currentevents {
+					fmt.Print(events.name, ": ", len(events.ops))
+
+					action := UPDATE
+					for _, op := range events.ops {
+						fmt.Print(", ", op.String())
+						if op == fsnotify.Remove || op == fsnotify.Rename {
+							action = REMOVE
+						} else {
+							action = UPDATE
+						}
+					}
+
+					switch action {
+					case UPDATE:
+						fmt.Println(" -> UPDATE")
+					case NEWDIR:
+						fmt.Println(" -> NEWDIR")
+					case REMOVE:
+						fmt.Println(" -> REMOVE")
+					}
+				}
+				fmt.Println()
+			}
 		}
 	}
 }
