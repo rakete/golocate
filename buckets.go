@@ -352,7 +352,7 @@ func (node *Node) Sort(sortcolumn SortColumn) {
 			sort.Stable(SortedBySize(node.queue))
 		}
 		node.sorted = sortMerge(sortcolumn, node.sorted, node.queue)
-		node.queue = nil
+		node.queue = node.queue[:0]
 	}
 
 	for _, child := range node.children {
