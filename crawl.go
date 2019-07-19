@@ -116,6 +116,21 @@ func (entries *FileEntries) Merge(_ SortColumn, files []*FileEntry) {
 	entries.queue = append(entries.queue, files...)
 }
 
+func (entries *FileEntries) Commit(sortcolumn SortColumn) {
+	switch sortcolumn {
+	case SORT_BY_NAME:
+		sort.Stable(SortedByName(entries.queue))
+	case SORT_BY_MODTIME:
+		sort.Stable(SortedByModTime(entries.queue))
+	case SORT_BY_SIZE:
+		sort.Stable(SortedBySize(entries.queue))
+	case SORT_BY_DIR:
+		sort.Stable(SortedByDir(entries.queue))
+	}
+	entries.sorted = sortMerge(sortcolumn, entries.sorted, entries.queue)
+	entries.queue = nil
+}
+
 func (entries *FileEntries) Take(cache MatchCaches, sortcolumn SortColumn, direction gtk.SortType, query *regexp.Regexp, n int, abort chan struct{}, results chan *FileEntry) {
 	var indexfunc func(int, int) int
 	switch direction {
@@ -125,16 +140,7 @@ func (entries *FileEntries) Take(cache MatchCaches, sortcolumn SortColumn, direc
 		indexfunc = func(l, j int) int { return l - 1 - j }
 	}
 
-	switch sortcolumn {
-	case SORT_BY_NAME:
-		sort.Stable(SortedByName(entries.queue))
-	case SORT_BY_MODTIME:
-		sort.Stable(SortedByModTime(entries.queue))
-	case SORT_BY_SIZE:
-		sort.Stable(SortedBySize(entries.queue))
-	}
-	entries.sorted = sortMerge(sortcolumn, entries.sorted, entries.queue)
-	entries.queue = nil
+	entries.Commit(sortcolumn)
 
 	l := len(entries.sorted)
 	if n > l {
@@ -187,7 +193,8 @@ sortedloop:
 	}
 }
 
-func (entries *FileEntries) Remove(sortcolumn SortColumn, files []*FileEntry) {
+func (entries *FileEntries) Remove(dirs []string, files []*FileEntry) {
+	entries.Commit(SORT_BY_DIR)
 }
 
 func (entries *FileEntries) NumFiles() int {
