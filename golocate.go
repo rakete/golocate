@@ -353,7 +353,7 @@ func updateView(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 					return
 				}
 				batch = append(batch, entry)
-			case <-time.After(500 * time.Millisecond):
+			case <-time.After(1000 * time.Millisecond):
 				if (n > 10 && len(batch) > 10) || len(batch) > 0 {
 					display(batch)
 				}
@@ -444,7 +444,7 @@ func Controller(mem ResultMemory, viewcontrols ViewControls, list *ViewList) {
 					lastpoll = time.Unix(0, 0)
 				}
 			}
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(1000 * time.Millisecond):
 		}
 
 		var currentbucket Bucket
@@ -539,6 +539,8 @@ func main() {
 			config.maxinotify = int(maxinotifyint64) / 2
 		}
 	}
+
+	config.maxinotify = 10000
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {
