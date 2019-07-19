@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	//"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -303,6 +303,7 @@ func collectByDir(wg *sync.WaitGroup, mem ResultMemory, collect FilesChannel, fi
 			newbydir := make([]*FileEntry, len(files))
 			copy(newbydir, files)
 
+			// - should already be sorted by dir
 			//sort.Stable(SortedByDir(newbydir))
 			mem.bydir.Merge(SORT_BY_DIR, newbydir)
 
@@ -375,6 +376,12 @@ func queueEvent(eventqueue *sync.Map, name string, info *sys.Stat_t, op fsnotify
 		events.(*Events).timestamps = append(events.(*Events).timestamps, timestamp)
 		events.(*Events).ops = append(events.(*Events).ops, op)
 	}
+
+	// if info == nil {
+	// 	fmt.Println("inotify:", name, op)
+	// } else {
+	// 	fmt.Println("polling:", name, op)
+	// }
 }
 
 func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs chan string, query chan *regexp.Regexp, finish chan struct{}) {
@@ -411,25 +418,24 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 	// - need to start watching before first visit
 	// - after visiting first time I need to decide if I keep watching or remove watcher and poll instead
 	// - to make that decision I need to maintain a list of directories sorted by their modtime
-	// - I need to react to inotify events:
 
-	// -- write, chmod file -> lstat file, remove file, add file
-
+	// - inotify events:
+	// -- write file, chmod file -> lstat file, remove file, add file
 	// -- write dir -> remove dir, remove files, visit dir, (add dir)
-
 	// -- chmod dir -> [lstat dir, remove dir], (add dir) *
 
 	// -- create file -> lstat file, add file *
 	//                -> [lstat parent, remove parent], (add parent)
-
 	// -- create dir -> visit dir, (add dir) *
 	//               -> [lstat parent, remove parent], (add parent) +
-
 	// -- rename, remove file -> remove file
 	//                        -> [lstat parent, remove parent], (add parent) +
-
 	// -- rename, remove dir -> remove dir
 	//                       -> [lstat parent, remove parent], (add parent) +
+
+	// - would be easier to just map all ops to files/dirs to just one updates
+	// to a dir, so:
+	// -- create, write, remove, chmod, rename -> remove and crawl containing dir
 
 	// polling:
 	// - occasionally poll all directories that are not watched with inotify
@@ -451,10 +457,9 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 		for {
 			select {
 			case dir := <-newdirs:
-
-				watcherr := watcher.Add(dir)
-				if watcherr != nil {
-					//log.Println("could not start watching directory for changes", dir, watcherr)
+				watcherror := watcher.Add(dir)
+				if watcherror != nil {
+					//log.Println("could not start watching directory for changes", dir, watcherror)
 				} else {
 					wg.Add(1)
 					maxproc <- struct{}{}
@@ -517,10 +522,12 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 						statdirerr := sys.Lstat(direntry.path, dirinfo)
 
 						if statdirerr != nil {
+							//fmt.Println("poll found removed dir", direntry.path)
 							queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Remove)
 						} else {
 							dirmodtime := time.Unix(dirinfo.Mtim.Sec, dirinfo.Mtim.Nsec)
 							if dirmodtime.After(direntry.modtime) {
+								//fmt.Println("poll found updated dir", direntry.path)
 								queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Write)
 							} else if pollfiles && len(direntry.files) > 0 {
 
@@ -540,10 +547,12 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 									statfileerr := sys.Lstat(filepath, fileinfo)
 
 									if statfileerr != nil {
+										//fmt.Println("poll found removed file:", filepath)
 										queueEvent(eventqueue, filepath, fileinfo, fsnotify.Remove)
 									} else {
 										filemodtime := time.Unix(fileinfo.Mtim.Sec, fileinfo.Mtim.Nsec)
 										if filemodtime.After(fileentry.modtime) {
+											//fmt.Println("poll found updated file:", filepath, direntry.path)
 											queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Write)
 											break statfilesloop
 										}
@@ -581,6 +590,12 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 				return true
 			})
 
+			// Create -> UPDATE
+			// Write -> UPDATE
+			// Chmod -> UPDATE
+
+			// Remove -> REMOVE
+			// Rename -> REMOVE
 			const (
 				UPDATE int = iota
 				NEWDIR
@@ -588,13 +603,13 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 			)
 
 			if len(currentevents) > 0 {
-				fmt.Println(now)
+				//fmt.Println(now)
 				for _, events := range currentevents {
-					fmt.Print(events.name, ": ", len(events.ops))
+					//fmt.Print(events.name, ": ", len(events.ops))
 
 					action := UPDATE
 					for _, op := range events.ops {
-						fmt.Print(", ", op.String())
+						//fmt.Print(", ", op.String())
 						if op == fsnotify.Remove || op == fsnotify.Rename {
 							action = REMOVE
 						} else {
@@ -604,11 +619,11 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 
 					switch action {
 					case UPDATE:
-						fmt.Println(" -> UPDATE")
+						//fmt.Println(" -> UPDATE")
 					case NEWDIR:
-						fmt.Println(" -> NEWDIR")
+						//fmt.Println(" -> NEWDIR")
 					case REMOVE:
-						fmt.Println(" -> REMOVE")
+						//fmt.Println(" -> REMOVE")
 					}
 				}
 				currentevents = currentevents[:0]
