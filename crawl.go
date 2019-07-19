@@ -558,7 +558,7 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 				}
 			}
 
-			var currentevents []Events
+			currentevents := make([]Events, 0, 100)
 			eventqueue.Range(func(name, events interface{}) bool {
 				ops := events.(*Events).ops
 
@@ -604,7 +604,7 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 						fmt.Println(" -> REMOVE")
 					}
 				}
-				fmt.Println()
+				currentevents = currentevents[:0]
 			}
 		}
 	}
