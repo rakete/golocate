@@ -7,11 +7,8 @@ import (
 	"regexp"
 	"runtime"
 	"sync"
-	//"syscall"
-	"io/ioutil"
+
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	glib "github.com/gotk3/gotk3/glib"
@@ -525,22 +522,20 @@ func main() {
 		NewSizeBucket(),
 	}
 	config := Configuration{
-		cores:       runtime.NumCPU(),
-		directories: []string{os.Getenv("HOME"), "/usr", "/var", "/sys", "/opt", "/etc", "/bin", "/sbin"},
+		cores:       8, //runtime.NumCPU(),
+		directories: []string{os.Getenv("HOME")},
 		maxinotify:  1024,
 	}
 
-	maxinotifybytes, readerr := ioutil.ReadFile("/proc/sys/fs/inotify/max_user_watches")
-	if readerr == nil {
-		maxinotifystring := strings.TrimSpace(string(maxinotifybytes))
-
-		maxinotifyint64, converr := strconv.ParseUint(maxinotifystring, 10, 32)
-		if converr == nil {
-			config.maxinotify = int(maxinotifyint64) / 2
-		}
-	}
-
-	config.maxinotify = 10000
+	//maxinotifybytes, readerr := ioutil.ReadFile("/proc/sys/fs/inotify/max_user_watches")
+	//if readerr == nil {
+	//	maxinotifystring := strings.TrimSpace(string(maxinotifybytes))
+	//
+	//	maxinotifyint64, converr := strconv.ParseUint(maxinotifystring, 10, 32)
+	//	if converr == nil {
+	//		config.maxinotify = int(maxinotifyint64) / 2
+	//	}
+	//}
 
 	var wg sync.WaitGroup
 	application.Connect("activate", func() {

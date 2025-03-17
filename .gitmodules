@@ -1,9 +1,0 @@
-[submodule "vendor/github.com/gotk3/gotk3"]
-	path = vendor/github.com/gotk3/gotk3
-	url = https://github.com/gotk3/gotk3.git
-[submodule "vendor/github.com/prometheus/procfs"]
-	path = vendor/github.com/prometheus/procfs
-	url = https://github.com/prometheus/procfs
-[submodule "vendor/github.com/fsnotify/fsnotify"]
-	path = vendor/github.com/fsnotify/fsnotify
-	url = https://github.com/fsnotify/fsnotify

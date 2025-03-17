@@ -13,7 +13,6 @@ import (
 
 	fsnotify "github.com/fsnotify/fsnotify"
 	gtk "github.com/gotk3/gotk3/gtk"
-	sys "golang.org/x/sys/unix"
 )
 
 type FileEntry struct {
@@ -211,8 +210,7 @@ func visit(wg *sync.WaitGroup, config Configuration, watcher *fsnotify.Watcher, 
 		<-maxwatch
 	} else {
 
-		dirinfo := new(sys.Stat_t)
-		staterr := sys.Lstat(dir, dirinfo)
+		dirinfo, staterr := os.Lstat(dir)
 
 		var infos []os.FileInfo
 		var readerr error
@@ -225,7 +223,7 @@ func visit(wg *sync.WaitGroup, config Configuration, watcher *fsnotify.Watcher, 
 			watcher.Remove(dir)
 			<-maxwatch
 		} else {
-			modtime := time.Unix(dirinfo.Mtim.Sec, dirinfo.Mtim.Nsec)
+			modtime := dirinfo.ModTime()
 
 			addedinotify := true
 			if len(maxwatch)+1 >= config.maxinotify || modtime.Before(relevantage) || len(infos) < 1 {
@@ -357,12 +355,12 @@ type DirEntry struct {
 
 type Events struct {
 	name       string
-	info       *sys.Stat_t
+	info       os.FileInfo
 	timestamps []time.Time
 	ops        []fsnotify.Op
 }
 
-func queueEvent(eventqueue *sync.Map, name string, info *sys.Stat_t, op fsnotify.Op) {
+func queueEvent(eventqueue *sync.Map, name string, info os.FileInfo, op fsnotify.Op) {
 	timestamp := time.Now()
 
 	events, loaded := eventqueue.LoadOrStore(name, &Events{
@@ -452,7 +450,6 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 
 	direntries := make([]*DirEntry, 0, 100000)
 
-	var currentquery *regexp.Regexp
 	go func() {
 		for {
 			select {
@@ -472,7 +469,6 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 					direntries = append(direntries, direntry)
 				}
 
-			case currentquery = <-query:
 			case <-finish:
 				return
 			}
@@ -491,7 +487,6 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 
 	wg.Done()
 	wg.Wait()
-	log.Println(len(maxwatch))
 
 	const (
 		pollparts        = 6
@@ -505,7 +500,7 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 		select {
 		case <-finish:
 			return
-		case <-time.After(1000 * time.Millisecond):
+		case <-time.After(10000 * time.Millisecond):
 			now := time.Now()
 
 			polldirscounter += 1
@@ -518,14 +513,13 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 
 				for _, direntry := range direntries {
 					if !direntry.inotify {
-						dirinfo := new(sys.Stat_t)
-						statdirerr := sys.Lstat(direntry.path, dirinfo)
+						dirinfo, statdirerr := os.Lstat(direntry.path)
 
 						if statdirerr != nil {
 							//fmt.Println("poll found removed dir", direntry.path)
 							queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Remove)
 						} else {
-							dirmodtime := time.Unix(dirinfo.Mtim.Sec, dirinfo.Mtim.Nsec)
+							dirmodtime := dirinfo.ModTime()
 							if dirmodtime.After(direntry.modtime) {
 								//fmt.Println("poll found updated dir", direntry.path)
 								queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Write)
@@ -543,14 +537,13 @@ func Crawler(wg *sync.WaitGroup, mem ResultMemory, config Configuration, newdirs
 									fileentry := direntry.files[i]
 
 									filepath := path.Join(fileentry.dir, fileentry.name)
-									fileinfo := new(sys.Stat_t)
-									statfileerr := sys.Lstat(filepath, fileinfo)
+									fileinfo, statfileerr := os.Lstat(filepath)
 
 									if statfileerr != nil {
 										//fmt.Println("poll found removed file:", filepath)
 										queueEvent(eventqueue, filepath, fileinfo, fsnotify.Remove)
 									} else {
-										filemodtime := time.Unix(fileinfo.Mtim.Sec, fileinfo.Mtim.Nsec)
+										filemodtime := fileinfo.ModTime()
 										if filemodtime.After(fileentry.modtime) {
 											//fmt.Println("poll found updated file:", filepath, direntry.path)
 											queueEvent(eventqueue, direntry.path, dirinfo, fsnotify.Write)

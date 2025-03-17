@@ -2,12 +2,10 @@ package main
 
 import (
 	"fmt"
-	//"sort"
-	"path"
+
 	"regexp"
 	"sync"
-	//"syscall"
-	"os"
+
 	"sort"
 	"time"
 
@@ -122,24 +120,24 @@ func NewNameBucket() *Node {
 func NewDirBucket() *Node {
 	bucket := new(Node)
 
-	homedir := os.Getenv("HOME")
 	var thresholds []string
 
-	thresholds = append(thresholds, "/h")
-	thresholds = append(thresholds, path.Join(homedir, ".l"))
-	thresholds = append(thresholds, path.Join(homedir, ".local", "s"))
-	if _, err := os.Stat(path.Join(homedir, ".local", "share", "Zeal", "Zeal", "docsets")); err == nil {
-		for _, char := range "ELNOSz" {
-			thresholds = append(thresholds, path.Join(homedir, ".local", "share", "Zeal", "Zeal", "docsets", string(char)))
-		}
-	}
-
-	thresholds = append(thresholds, path.Join(homedir, ".local", "share", "z"))
-	thresholds = append(thresholds, path.Join(homedir, ".z"))
-	for _, char := range "Zmz" {
-		thresholds = append(thresholds, path.Join(homedir, string(char)))
-	}
-	thresholds = append(thresholds, []string{"/t", "/v", "/w"}...)
+	//homedir := os.Getenv("HOME")
+	//thresholds = append(thresholds, "/h")
+	//thresholds = append(thresholds, path.Join(homedir, ".l"))
+	//thresholds = append(thresholds, path.Join(homedir, ".local", "s"))
+	//if _, err := os.Stat(path.Join(homedir, ".local", "share", "Zeal", "Zeal", "docsets")); err == nil {
+	//	for _, char := range "ELNOSz" {
+	//		thresholds = append(thresholds, path.Join(homedir, ".local", "share", "Zeal", "Zeal", "docsets", string(char)))
+	//	}
+	//}
+	//
+	//thresholds = append(thresholds, path.Join(homedir, ".local", "share", "z"))
+	//thresholds = append(thresholds, path.Join(homedir, ".z"))
+	//for _, char := range "Zmz" {
+	//	thresholds = append(thresholds, path.Join(homedir, string(char)))
+	//}
+	//thresholds = append(thresholds, []string{"/t", "/v", "/w"}...)
 
 	for _, char := range thresholds {
 		bucket.children = append(bucket.children, &Node{
