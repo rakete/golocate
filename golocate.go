@@ -326,7 +326,8 @@ func updateView(cache MatchCaches, bucket Bucket, list *ViewList, sortcolumn Sor
 			list.entries = make([]*FileEntry, len(newentries))
 			copy(list.entries, newentries)
 
-			list.query <- query
+			// TODO: must be some kind of race condition here
+			//list.query <- query
 			list.mutex.Unlock()
 
 			wg.Done()
