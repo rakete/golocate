@@ -525,7 +525,7 @@ func main() {
 	config := Configuration{
 		cores:       8, //runtime.NumCPU(),
 		directories: []string{os.Getenv("HOME")},
-		maxinotify:  1024,
+		maxinotify:  100000,
 	}
 
 	//maxinotifybytes, readerr := ioutil.ReadFile("/proc/sys/fs/inotify/max_user_watches")
