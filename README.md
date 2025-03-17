@@ -1,3 +1,18 @@
+This is an experiment where I tried to replicate the functionality of [Everything](https://www.voidtools.com/support/everything/) for Linux. The idea was to combine a fast filesystem crawler with fsinotify to get a complete view of all files on a system as a list, and reorder it in realtime whenever any file changes on the system. This way you can order the list by modtime for example, and then always see the last changed files at the top of the list.
+
+The program implements a simple UI in gtk3 with a filter line at the top where you can enter a regex to filter files with, and a list of files that displays all files matching the filter, which can be sorted by name, directory, size or modtime. The crawler spawns goroutines working through subdirectories of the users homedir, sorting the files on the fly and merging the results of all goroutines. The list on the UI receives updates about this in periodic intervals and updates the list of files. There is some logic to only show the first 1000 or so entries, and then increase the amount if the user scrolls down.
+
+You can be build this on windows as well, I had to install gtk3 like so in the msys2 mingw 64-bit shell:
+```
+pacman -S mingw-w64-x86_64-gtk3
+```
+
+Then just you should be able to just call `go build` in the cloned repository inside msys2 mingw64.
+
+![UI](screenshots/ui.png)
+
+---
+
     ~/g/s/golocate:master> go test -coverprofile=coverage.out -tags gtk_3_18 -bench ".*"
     2018/03/28 01:52:18 running TestBuckets
     2018/03/28 01:52:18 starting Crawl on 8 cores
